@@ -4,24 +4,56 @@
 #include <Geode/modify/EditorUI.hpp>
 using namespace geode::prelude;
 
+#define SNAP_COL ccc3(255, 135, 0)
+#define LOCK_COL ccc3(155,155,155)
+#define WHITE_COL ccc3(255, 255, 255)
+
+struct MyGJTransformControl;
+
 struct {
+	bool m_isSnap = false;
 	bool m_isFreeRot = false;
-	void reset() {
-		m_isFreeRot = false;
-	}
+	bool m_isRotDirty = false;
+	float m_freeRotFinalAngle = 0;
+	MyGJTransformControl* m_transformControls = nullptr;
 } GLOBAL;
+
+/*
+Transform controls scheme: (each sprite has a unique index)
+
+      |10|
+       |
+(6)---(4)---(7)
+ |           |
+ |           |
+(2)   (1)   (3) -- |11| -- (12)
+ |           |
+ |           |
+(8)---(5)---(9)
+
+*/
 
 class $modify(MyGJTransformControl, GJTransformControl) {
 	struct Fields {
-		bool m_isSnap = false;
+		float m_lockedRotation = 0; // last value of rotation before it's been locked
 		CCMenu* m_menu;
-		CCMenuItemSpriteExtra* m_snapBtn;
 		CCMenuItemSpriteExtra* m_rotBtn;
+		CCMenuItemSpriteExtra* m_snapBtn;
+		uint16_t m_disabledSpritesRot = 0;  // sprites disabled because of free rotation or snap
+		uint16_t m_disabledSpritesSnap = 0; // both arebit arrays (lowest 12 bits used - one for each sprite)
+
+		~Fields() {GLOBAL.m_transformControls = nullptr;}
 	};
+
+	inline uint16_t getDisabledSprites() {
+		return m_fields->m_disabledSpritesSnap | m_fields->m_disabledSpritesRot;
+	}
 
 	$override bool init() {
 		if (!GJTransformControl::init()) return false;
-		// fix menu anchor and button overlapping
+		GLOBAL.m_transformControls = this;
+
+		// fix menu sprite 10 and button overlapping 
 		m_fields->m_menu = static_cast<CCMenu*>(this->m_warpLockButton->getParent());
 		m_fields->m_menu->setAnchorPoint(ccp(0,0));
 		m_warpLockButton->setPosition(ccp(0, 20));
@@ -31,7 +63,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 			CCSprite::createWithSpriteFrameName("warpLockOffBtn_001.png"), 
 			this, menu_selector(MyGJTransformControl::onSnapBtn));
 		m_fields->m_rotBtn = CCMenuItemSpriteExtra::create(
-			CCSprite::createWithSpriteFrameName("warpLockOffBtn_001.png"), 
+			CCSprite::createWithSpriteFrameName("freeRotOffBtn_001.png"_spr), 
 			this, menu_selector(MyGJTransformControl::onRotBtn));
 		
 		m_fields->m_menu->addChild(m_fields->m_snapBtn);
@@ -53,18 +85,69 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		labelRot->setScale(.2f);
 		labelPos->setScale(.2f);
 
+		// reset global state
 		GLOBAL.m_isFreeRot = false;
+		GLOBAL.m_isRotDirty = false;
+		GLOBAL.m_isSnap = false;
 
 		return true;
 	}
 
-	// return true and write snap coords to snapCoords if anchor snaps
-	bool checkAnchorSnaps(const float limit, const CCPoint anchor, CCPoint* const snapCoords) {
-		// (math code alert!) convert anchor pos to mainNode coords
+	// I call this before EditorUI::activateTransformControls()
+	void prepareToActivate() {
+		m_fields->m_disabledSpritesSnap = 0;
+		m_fields->m_disabledSpritesRot = 0;
+		if (GLOBAL.m_isFreeRot) {
+			m_fields->m_rotBtn->setSprite(CCSprite::createWithSpriteFrameName("freeRotOffBtn_001.png"_spr));
+			GLOBAL.m_isFreeRot = false;
+		}
+	}
+
+	void updateDisabledSprites() {
+		uint16_t mask = 0b100000000000;
+		const uint16_t disabled = getDisabledSprites();
+		for(int i = 1; i < 13; i++) {
+			auto spr = spriteByTag(i);
+			// check if the sprite is disabled
+			spr->setColor((mask & disabled) ? LOCK_COL : WHITE_COL);
+			mask = mask >> 1;
+		}
+	}
+
+	void setDisabledSpritesByNodeIndex(short indx) {
+		switch (indx) {
+			case 2: m_fields->m_disabledSpritesSnap = 0b010001010000; break; // 2,6,8
+			case 3: m_fields->m_disabledSpritesSnap = 0b001000101000; break; // 3,7,9
+			case 4: m_fields->m_disabledSpritesSnap = 0b000101100000; break; // 4,6,7
+			case 5: m_fields->m_disabledSpritesSnap = 0b000010011000; break; // 5,8,9
+			case 6: m_fields->m_disabledSpritesSnap = 0b010101110000; break; // 2,4,6,7,8
+			case 7: m_fields->m_disabledSpritesSnap = 0b001101101000; break; // 3,4,6,7,9
+			case 8: m_fields->m_disabledSpritesSnap = 0b010011011000; break; // 2,5,6,8,9
+			case 9: m_fields->m_disabledSpritesSnap = 0b001010111000; break; // 3,5,7,8,9
+			default: m_fields->m_disabledSpritesSnap = 0; break;
+		}
+	}
+
+	void checkAndUpdateDisabledSpritesForCurrentAnchorPosition() {
+		const auto anchor = spriteByTag(1);
+		auto aPos = anchor->getPosition();
+		uint8_t snapNodeIndx = 0;
+
+		checkAnchorIsOnEdge(0.05, aPos, &snapNodeIndx);
+
+		setDisabledSpritesByNodeIndex(snapNodeIndx);
+
+		updateDisabledSprites();
+	}
+
+	// return true and set snapCoords and snapSpriteIndex if anchor snaps
+	bool checkAnchorSnaps(const float limit, const CCPoint anchor, CCPoint* const snapCoords, 
+							uint8_t* const spriteIndex) {
+		// math code alert! - convert anchor pos to mainNode coords
 		const double sin = std::sin(m_mainNode->getRotation()*M_PI/180.0);
 		const double cos = std::cos(m_mainNode->getRotation()*M_PI/180.0);
 		const auto anchorRelPos = ccp(cos * anchor.x - sin * anchor.y, sin * anchor.x + cos * anchor.y);
-		// check snap
+		// check distance between the anchor and the sprite
 		for (int i = 2; i < 10; i++) {
 			auto node = spriteByTag(i);
 			auto distVec = anchorRelPos - node->getPosition();
@@ -72,211 +155,315 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 			if (distSq < limit * limit) {
 				auto nodePos = node->getPosition();
 				*snapCoords = ccp(cos * nodePos.x + sin * nodePos.y, -sin * nodePos.x + cos * nodePos.y);
+				*spriteIndex = i;
 				return true;
 			}
 		}
 		return false;
 	}
+
+	// check if the anchor is aligned with the edges of rectangle or their extensions. 
+	// returns the result and sets the spriteIndex
+	bool checkAnchorIsOnEdge(const float limit, const CCPoint anchor, uint8_t* const spriteIndex) {
+		// math code alert! - convert anchor pos to mainNode coords
+		const double sin = std::sin(m_mainNode->getRotation()*M_PI/180.0);
+		const double cos = std::cos(m_mainNode->getRotation()*M_PI/180.0);
+		const auto anchorRelPos = ccp(cos * anchor.x - sin * anchor.y, sin * anchor.x + cos * anchor.y);
+		// vertices cw
+		CCPoint v[] = {spriteByTag(6)->getPosition(), spriteByTag(7)->getPosition(), 
+						spriteByTag(9)->getPosition(), spriteByTag(8)->getPosition()};
+		uint8_t alignedEdges = 0;
+		// check all rect edges
+		for (int A = 3, B = 0; B < 4; A = B++) {
+			float ABx = v[B].x - v[A].x;
+			float ABy = v[B].y - v[A].y;
+			auto C = anchorRelPos;
+			if (std::abs(ABx) > std::abs(ABy)) {
+				float ACx = C.x - v[A].x;
+				float ACy = C.y - v[A].y;
+				float tg = ABy / ABx;
+				float y = tg * ACx;
+				if (std::abs(ACy - y) < limit) {
+					alignedEdges |= 0b1000 >> B;
+				}
+			} else {
+				float BCx = v[B].x - C.x;
+				float BCy = v[B].y - C.y;
+				float tg = ABx / ABy;
+				float x = tg * BCy;
+				if (std::abs(BCx - x) < limit) {
+					alignedEdges |= 0b1000 >> B;
+				}
+			}
+		}
+		switch (alignedEdges) {
+			case 0b1000: *spriteIndex = 2; break;
+			case 0b0100: *spriteIndex = 4; break;
+			case 0b0010: *spriteIndex = 3; break;
+			case 0b0001: *spriteIndex = 5; break;
+			case 0b1100: *spriteIndex = 6; break;
+			case 0b0110: *spriteIndex = 7; break;
+			case 0b0011: *spriteIndex = 9; break;
+			case 0b1001: *spriteIndex = 8; break;
+			default: return false;
+		}
+		return true;
+	}
 	
 	$override void ccTouchMoved(CCTouch* p0, CCEvent* p1) {
+		if (m_touchID != p0->m_nId) return;
+
+		// check if the current button is disabled, don't allow to use it
+		if (((uint16_t)0b1000000000000 >> m_transformButtonType) & getDisabledSprites()) {
+			return;
+		}
+
 		GJTransformControl::ccTouchMoved(p0, p1);
-		if (!m_fields->m_isSnap) return;
 
-		auto anchor = spriteByTag(1);
-		auto aPos = anchor->getPosition();
-		if (aPos.x == 0 && aPos.y == 0) return;
-		// anchor was moved
-		float limit = anchor->getScale() * 18; // min dist after which the anchor snaps to the node
-
-		if (checkAnchorSnaps(limit, aPos, &aPos)) {
-			anchor->setColor(ccc3(255, 135, 0));
-			anchor->setPosition(aPos);
-			updateButtons(false, false);
-		} else {
-			anchor->setColor(ccc3(255, 255, 255));
+		// check anchor snaps
+		if (m_transformButtonType == 1) { // anchor
+			if (GLOBAL.m_isSnap) {
+				// check anchor snap
+				const auto anchor = spriteByTag(1);
+				auto aPos = anchor->getPosition();
+				// min dist after which the anchor snaps to the node
+				const float limit = anchor->getScale() * 18;
+				uint8_t snapNodeIndx;
+				if (checkAnchorSnaps(limit, aPos, &aPos, &snapNodeIndx)) {
+					// anchor was moved and we've just attached to the node
+					anchor->setColor(SNAP_COL);
+					anchor->setPosition(aPos);
+				} else {
+					anchor->setColor(WHITE_COL);
+				}
+			}
+		
+		} else if (m_transformButtonType == 12) { // rot
+			if (GLOBAL.m_isSnap) {
+				// check rotation snap
+				const auto rotator = spriteByTag(12);
+				const float rot = m_mainNode->getRotation();
+				const int rotDiff = (int)(std::abs(rot) + 0.5) % 90;
+				const int deadzone = 2;
+				if (rotDiff <= deadzone || rotDiff >= 90 - deadzone) {
+					// make obj rot multiple of 90
+					int newRot = ((int)rot + 10 * (rot > 0 ? 1 : -1)) / 90 * 90;
+					m_mainNode->setRotation(newRot);
+					if (!GLOBAL.m_isFreeRot) {
+						EditorUI::get()->transformRotationChanged(newRot);
+					}
+					rotator->setColor(SNAP_COL);
+				} else {
+					rotator->setColor(WHITE_COL);
+				}
+			}
+			if (GLOBAL.m_isFreeRot) {
+				GLOBAL.m_isRotDirty = true;
+				EditorUI::get()->transformRotationChanged(m_fields->m_lockedRotation);
+			}
+			
 		}
 	}
 
 	$override void ccTouchEnded(CCTouch* p0, CCEvent* p1) {
-		GJTransformControl::ccTouchEnded(p0, p1);
-		spriteByTag(1)->setColor(ccc3(255, 255, 255));
-	}
+		// check what sprites should be disabled depending on where the anchor snaps
+		// (we have to "disable" sprites that are aligned with the anchor because
+		// otherwise we will get the infinite scale when try to use them. In worst case
+		// this will cause the zero-division crash in RobTop's code)
+		const auto anchor = spriteByTag(1);
+		auto aPos = anchor->getPosition();
+		uint8_t snapNodeIndx = 0;
 
-	$override void ccTouchCancelled(CCTouch* p0, CCEvent* p1) {
-		GJTransformControl::ccTouchCancelled(p0, p1);
-		spriteByTag(1)->setColor(ccc3(255, 255, 255));
+		if (m_transformButtonType == 1 && GLOBAL.m_isSnap) { 
+			float limit = anchor->getScale() * 18; // min dist after which the anchor snaps to the node
+			checkAnchorSnaps(limit, aPos, &aPos, &snapNodeIndx);
+		} else {
+			// some sprites may still stay aligned with the anchor even after transform
+			checkAnchorIsOnEdge(0.05, aPos, &snapNodeIndx);
+		}
+
+		setDisabledSpritesByNodeIndex(snapNodeIndx);
+
+		updateDisabledSprites();
+		
+		GJTransformControl::ccTouchEnded(p0, p1);
 	}
 
 	$override void scaleButtons(float scale) {
 		GJTransformControl::scaleButtons(scale);
-		// fix scaled sprite doesn't match button touch box (scale not btn but menu)
+		// fix bug when scaled sprite doesn't match button touch box (scale not btn but menu)
 		if (!m_fields->m_menu) return;
 		m_fields->m_menu->setScale(scale);
 		auto btn = m_warpLockButton->getChildByTag(1);
 		btn->setScale(1.f);		
 	}
 
-	$override void updateButtons(bool p0, bool p1) {
-		log::debug("call buttons update {} {}", p0, p1);
-		// GLOBAL.m_forceAllowDefaultTransform = true;
-		GJTransformControl::updateButtons(p0, p1);
-		log::debug("ret buttons update {} {}", p0, p1);
-	// 	// GLOBAL.m_forceAllowDefaultTransform = false;
-	// 	// auto editor = EditorUI::get();
-
-	// 	// log::debug("custom updated -");
-	// 	// CCArray* selected;
-	// 	// if (editor->m_selectedObjects == nullptr || editor->m_selectedObjects->count() == 0) {
-	// 	// 	if (editor->m_selectedObject == nullptr) return;
-	// 	// 	selected = CCArray::createWithObject(editor->m_selectedObject);
-	// 	// } else {
-	// 	// 	selected = editor->m_selectedObjects;
-	// 	// 	if (selected == nullptr) return;
-	// 	// }
-	// 	// editor->transformObjects(selected, editor->m_pivotPoint, 
-	// 	// 	editor->m_transformState.m_scaleX, editor->m_transformState.m_scaleY, 
-	// 	// 	editor->m_transformState.m_angleX - 45, editor->m_transformState.m_angleY - 45,
-	// 	// 	editor->m_transformState.m_skewX, editor->m_transformState.m_skewY);
-	// 	// // editor->transformObjects(selected, editor->m_pivotPoint, 1, 1, 30, 30, 0, 0);
-	// 	// log::debug("custom updated");
-	}
-
 	void onSnapBtn(CCObject* sender) {
-		m_fields->m_isSnap = !m_fields->m_isSnap;
-		auto spr = m_fields->m_isSnap ? "warpLockOnBtn_001.png" : "warpLockOffBtn_001.png";
+		GLOBAL.m_isSnap = !GLOBAL.m_isSnap;
+		auto spr = GLOBAL.m_isSnap ? "warpLockOnBtn_001.png" : "warpLockOffBtn_001.png";
 		m_fields->m_snapBtn->setSprite(CCSprite::createWithSpriteFrameName(spr));
-
-		// auto editor = EditorUI::get();
-		// auto scSt = &editor->m_transformState;
-		
-		// GLOBAL.m_suppressTransform = m_fields->m_isSnap;
-		// log::debug("array {}", this->m_unk1);
-		// log::debug("array {}", editor->m_selectedObjects);
-		// log::debug("equal {}", editor->m_selectedObjects->objectAtIndex(0) == m_unk1->objectAtIndex(0));
-		// static GJTransformState trSt;
-		// if (GLOBAL.m_suppressTransform) {
-		// 	trSt = editor->m_transformState;
-			
-		// } else {
-		// 	editor->m_transformState = trSt;
-		// }
-		// angleX, angleY - rot
-		// unk1 - rot
-		// unk4 - prev. rot
-		// log::debug("state 1: {} {} {} {} {} {}", scSt->m_scaleX, scSt->m_scaleY, scSt->m_angleX, scSt->m_angleY, scSt->m_skewX, scSt->m_skewY);
-		// log::debug("state 2: {} {} {} {} {} {}", scSt->m_unk1, scSt->m_unk2, scSt->m_unk3, scSt->m_unk4, scSt->m_unk8, scSt->m_unk9);
-		// log::debug("state 3: {} {} {}", scSt->m_unk5, scSt->m_unk6, scSt->m_unk7);
-
 	}
 
 	void onRotBtn(CCObject* sender) {
 		GLOBAL.m_isFreeRot = !GLOBAL.m_isFreeRot;
-		auto spr = GLOBAL.m_isFreeRot ? "warpLockOnBtn_001.png" : "warpLockOffBtn_001.png";
-		m_fields->m_rotBtn->setSprite(CCSprite::createWithSpriteFrameName(spr));
+		if (GLOBAL.m_isFreeRot) {
+			m_fields->m_rotBtn->setSprite(CCSprite::createWithSpriteFrameName("freeRotOnBtn_001.png"_spr));
+			m_fields->m_disabledSpritesRot = 0b011111111110; // 1...11
+			m_fields->m_lockedRotation = m_mainNode->getRotation();
+		} else {
+			m_fields->m_rotBtn->setSprite(CCSprite::createWithSpriteFrameName("freeRotOffBtn_001.png"_spr));
+			m_fields->m_disabledSpritesRot = 0;
+			if (GLOBAL.m_isRotDirty) {
+				GLOBAL.m_freeRotFinalAngle = m_mainNode->getRotation();
+				EditorUI::get()->deactivateTransformControl();
+				EditorUI::get()->activateTransformControl(nullptr);
+				return;
+			}
+		}
+		updateDisabledSprites();
 	}
 };
 
 
 class $modify(MyEditorUI, EditorUI) {
+	// The purpose here is to implement free rotation for transform 
+	// controls. This means that you would be able to rotate the interface 
+	// while the selected objects stay in place. 
+	// The rotation value is set as soon as transform mode is activated inside the
+	// updateTransformControl() function. And it is equal to the rotation of the first 
+	// object in selection. 
+	// So the way the code below works is it puts an object with desired rotation in the first 
+	// position in selected objects array. Then this value is used to set the rotation for
+	// the transform controls, then this object is removed from array.
+
+	// P.S. I tried many other things to get this work, but it seems impossible to do 
+	// without affecting other parts of transform system (which either break everything or 
+	// don't let anything change). 
+	// And only this trick worked fine.
 
 	struct Fields {
 		bool m_isActivate = false; // is activateTransformControl func on the call stack
-		bool m_isSneaky = false; // is the sneakyObj used
+		bool m_isSneaky = false; // is the fake main object used
 		Ref<GameObject> m_sneakyObj;
 		Fields() {
-			GLOBAL.reset();
+			GLOBAL.m_isSnap = false;
+			GLOBAL.m_isFreeRot = false;
+			GLOBAL.m_isRotDirty = false;
 			m_sneakyObj = GameObject::createWithKey(929);
 			m_sneakyObj->commonSetup();
 			m_sneakyObj->m_outerSectionIndex = -1;
 		}
 	};
 
-	// todo: debug func
-	void toggleSnap(CCObject* p) {
-		// auto tmpObj = static_cast<GameObject*>(m_selectedObjects->objectAtIndex(0));
-		// if(tmpObj == nullptr) return;
-		// log::debug("startpos={}", tmpObj->m_startPosition);
-		// log::debug("pos     ={}", tmpObj->getPosition());
-		// m_transformControl->m_mainNode->setVisible(!m_transformControl->m_mainNode->isVisible());
-		// log::debug("unk220 {} {}", m_unk220->getPosition(), m_unk220->getRotation());
-		// log::debug("unk224 {} {}", m_unk224->getPosition(), m_unk224->getRotation());
-		// log::debug("id {}", m_selectedObject->m_uniqueID);
-
-	}
-
-	$override void transformObjects(CCArray* objs, CCPoint anchor, float scaleX, float scaleY, float rotX, float rotY, float warpX, float warpY) {
-		log::debug("call transform objs {}", rotX);
+	$override 
+	void transformObjects(CCArray* objs, CCPoint anchor, float scaleX, float scaleY, 
+							float rotX, float rotY, float warpX, float warpY) {
+		// we don't need this object anymore
 		if (m_fields->m_isSneaky) {
-			m_selectedObjects->fastRemoveObjectAtIndex(0); // remove sneakyObj
-			if (m_selectedObjects->count() == 1) {
-				auto obj = m_selectedObjects->objectAtIndex(0);
-				m_selectedObjects->removeObjectAtIndex(0);
-				m_selectedObject = static_cast<GameObject*>(obj);
-				objs = CCArray::createWithObject(obj);
-			}
-			log::debug("-sneaky");
+			popFakeMainObject();
 			m_fields->m_isSneaky = false;
 		}
 		EditorUI::transformObjects(objs, anchor, scaleX, scaleY, rotX, rotY, warpX, warpY);
-		log::debug("ret transform objs {}", rotX);
 		return;
 	}
 
-	$override void updateTransformControl() {
-		float rot = 45;
-		log::debug("call update controls");
-		if (m_fields->m_isActivate) {
-			// means this function is called from activateTransformControl()
-			if (m_selectedObject != nullptr) {
-				// selected 1 obj
-				if (m_selectedObjects == nullptr) {
-					m_selectedObjects = CCArray::create();
-					m_selectedObjects->retain();
-				}
-				m_selectedObjects->addObject(m_fields->m_sneakyObj);
-				m_selectedObjects->addObject(m_selectedObject);
-				m_fields->m_sneakyObj->setPosition(m_selectedObject->getPosition());
-				m_fields->m_sneakyObj->setRotation(rot);
-				m_selectedObject = nullptr;
-				m_fields->m_isSneaky = true;
-
-			} else if (m_selectedObjects != nullptr && m_selectedObjects->count() > 0) {
-				// selected 2+ objects
-				auto first = static_cast<GameObject*>(m_selectedObjects->firstObject());
-				m_selectedObjects->addObject(first);
-				m_selectedObjects->replaceObjectAtIndex(0, m_fields->m_sneakyObj);
-				m_fields->m_sneakyObj->setPosition(first->getPosition());
-				m_fields->m_sneakyObj->setRotation(rot);
-				m_fields->m_isSneaky = true;
-			} else {
-				// nothing is selected
+	// adds a new object with given rotation to the selection
+	bool pushFakeMainObjectWithRotation(float rot) {
+		if (m_selectedObject != nullptr) {
+			// selected 1 obj
+			if (m_selectedObjects == nullptr) {
+				m_selectedObjects = CCArray::create();
+				m_selectedObjects->retain();
 			}
+			m_selectedObjects->addObject(m_fields->m_sneakyObj);
+			m_selectedObjects->addObject(m_selectedObject);
+			m_fields->m_sneakyObj->setPosition(m_selectedObject->getPosition());
+			m_fields->m_sneakyObj->setRotation(rot);
+			m_selectedObject = nullptr;
+
+		} else if (m_selectedObjects != nullptr && m_selectedObjects->count() > 0) {
+			// selected 2+ objects
+			auto first = static_cast<GameObject*>(m_selectedObjects->firstObject());
+			m_selectedObjects->addObject(first);
+			m_selectedObjects->replaceObjectAtIndex(0, m_fields->m_sneakyObj);
+			m_fields->m_sneakyObj->setPosition(first->getPosition());
+			m_fields->m_sneakyObj->setRotation(rot);
+		} else {
+			// nothing is selected
+			return false;
+		}
+		return true;
+	}
+
+	// removes the first object from selection
+	void popFakeMainObject() {
+		// object stays at the array less than a frame, so assume it can't be removed
+		m_selectedObjects->fastRemoveObjectAtIndex(0); // remove sneakyObj
+		if (m_selectedObjects->count() == 1) {
+			auto obj = m_selectedObjects->objectAtIndex(0);
+			m_selectedObjects->removeObjectAtIndex(0);
+			m_selectedObject = static_cast<GameObject*>(obj);
+		}
+	}
+
+	$override 
+	void updateTransformControl() {
+		// if the function is called from activateTransformControl()
+		if (m_fields->m_isActivate && GLOBAL.m_isRotDirty) {
+			float rot = GLOBAL.m_freeRotFinalAngle;
+			if (pushFakeMainObjectWithRotation(rot)) {
+				m_fields->m_isSneaky = true;
+			}
+			GLOBAL.m_isRotDirty = false;
 		}
 
 		EditorUI::updateTransformControl();
 
 		// in case transformObjects() was not reached
 		if (m_fields->m_isSneaky) {
-			m_selectedObjects->fastRemoveObjectAtIndex(0); // remove sneakyObj
-			if (m_selectedObjects->count() == 1) {
-				auto obj = m_selectedObjects->objectAtIndex(0);
-				m_selectedObjects->removeObjectAtIndex(0);
-				m_selectedObject = static_cast<GameObject*>(obj);
-			}
+			popFakeMainObject();
 			m_fields->m_isSneaky = false;
 		}
-
-		log::debug("ret update controls");
 	}
 
-	$override void activateTransformControl(CCObject* p0) {
-		log::debug("call activate controls");
+	// prevent undo/redo bugs
+	$override
+	void undoLastAction(CCObject* p0) {
+		EditorUI::undoLastAction(p0);
+		if (auto controls = GLOBAL.m_transformControls) {
+			if (controls->isVisible()) {
+				controls->checkAndUpdateDisabledSpritesForCurrentAnchorPosition();
+			}
+		}
+	}
+
+	$override
+	void redoLastAction(CCObject* p0) {
+		EditorUI::redoLastAction(p0);
+		if (auto controls = GLOBAL.m_transformControls) {
+			if (controls->isVisible()) {
+				controls->checkAndUpdateDisabledSpritesForCurrentAnchorPosition();
+			}
+		}
+	}
+
+	$override 
+	void activateTransformControl(CCObject* p0) {
+		if (auto controls = GLOBAL.m_transformControls) {
+			controls->prepareToActivate();
+		}
 
 		m_fields->m_isActivate = true;
 		EditorUI::activateTransformControl(p0);
 		m_fields->m_isActivate = false;
 
-		log::debug("ret activate controls");
+		GLOBAL.m_isRotDirty = false;
+
+		if (auto controls = GLOBAL.m_transformControls) {
+			if (controls->isVisible()) {
+				controls->updateDisabledSprites();
+			}
+		}
 	}
 
 };

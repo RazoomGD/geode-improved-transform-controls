@@ -6,9 +6,16 @@
 		"mac": "2.2074",
 		"ios": "2.2074"
 	},
-	"id": "razoom.better_transform",
-	"name": "Better Transform",
+	"id": "razoom.improved_transform_controls",
+	"name": "Improved Transform Controls",
 	"version": "v1.0.0",
 	"developer": "RaZooM",
-	"description": "later"
+	"description": "Adds useful options to transform controls",
+	"resources": {
+		"spritesheets": {
+			"ITCSpritesheet": [
+				"resources/*.png"
+			]
+		}
+	}
 }
