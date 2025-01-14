@@ -5,8 +5,12 @@
 using namespace geode::prelude;
 
 #define SNAP_COL ccc3(255, 135, 0)
-#define LOCK_COL ccc3(155,155,155)
+#define LOCK_COL ccc3(155, 155, 155)
 #define WHITE_COL ccc3(255, 255, 255)
+#define INTERFACE_COLOR ccc4(255, 255, 0, 255)
+
+// max error in fp measurements (in points)
+#define MAX_FP_ERROR 0.01f
 
 struct MyGJTransformControl;
 
@@ -16,6 +20,13 @@ struct {
 	bool m_isRotDirty = false;
 	float m_freeRotFinalAngle = 0;
 	MyGJTransformControl* m_transformControls = nullptr;
+	// mod settings
+	struct {
+		int a;
+		void update() {
+
+		}
+	} m_settings;
 } GLOBAL;
 
 /*
@@ -33,6 +44,55 @@ Transform controls scheme: (each sprite has a unique index)
 
 */
 
+class GJTransformControlInterface : public CCNode {
+private:
+	GJTransformControl* m_transformControl;
+	bool m_visibleRect = false;
+	bool m_visibleRot = false;
+public:
+	static GJTransformControlInterface* create(GJTransformControl* transformControl) {
+		auto ret = new GJTransformControlInterface();
+		if (ret && ret->init(transformControl)) {
+			ret->autorelease();
+			return ret;
+		}
+		CC_SAFE_DELETE(ret);
+		return nullptr;
+	}
+
+	bool init(GJTransformControl* transformControl) {
+		m_transformControl = transformControl;
+		this->setID("razoom.improved-transform-control.interface");
+		return true;
+	}
+
+	void setInterfaceVisibility(bool rect, bool rot) {
+		m_visibleRect = rect;
+		m_visibleRot = rot;
+	}
+
+	void draw() override {
+		ccDrawColor4B(INTERFACE_COLOR);
+		if (m_visibleRect) {
+			auto tl = m_transformControl->spriteByTag(6);
+			auto br = m_transformControl->spriteByTag(9);
+			auto t = m_transformControl->spriteByTag(4);
+			auto b = m_transformControl->spriteByTag(5);
+			auto l = m_transformControl->spriteByTag(2);
+			auto r = m_transformControl->spriteByTag(3);
+			ccDrawRect(tl->getPosition(), br->getPosition());
+
+			ccDrawLine(t->getPosition(),b->getPosition());
+			ccDrawLine(l->getPosition(), r->getPosition());
+		}
+		// if (m_visibleRot) {
+		// 	auto rotPos = m_transformControl->m_rotatePosition;
+		// 	ccDrawLine(ccp(0,0), rotPos);
+		// }
+	}
+};
+
+
 class $modify(MyGJTransformControl, GJTransformControl) {
 	struct Fields {
 		float m_lockedRotation = 0; // last value of rotation before it's been locked
@@ -41,6 +101,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		CCMenuItemSpriteExtra* m_snapBtn;
 		uint16_t m_disabledSpritesRot = 0;  // sprites disabled because of free rotation or snap
 		uint16_t m_disabledSpritesSnap = 0; // both arebit arrays (lowest 12 bits used - one for each sprite)
+		Ref<GJTransformControlInterface> m_interface;
 
 		~Fields() {GLOBAL.m_transformControls = nullptr;}
 	};
@@ -49,18 +110,19 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		return m_fields->m_disabledSpritesSnap | m_fields->m_disabledSpritesRot;
 	}
 
-	$override bool init() {
+	$override 
+	bool init() {
 		if (!GJTransformControl::init()) return false;
 		GLOBAL.m_transformControls = this;
 
 		// fix menu sprite 10 and button overlapping 
 		m_fields->m_menu = static_cast<CCMenu*>(this->m_warpLockButton->getParent());
 		m_fields->m_menu->setAnchorPoint(ccp(0,0));
-		m_warpLockButton->setPosition(ccp(0, 20));
+		m_warpLockButton->setPosition(ccp(-30, 20));
 
 		// add new buttons to the menu
 		m_fields->m_snapBtn = CCMenuItemSpriteExtra::create(
-			CCSprite::createWithSpriteFrameName("warpLockOffBtn_001.png"), 
+			CCSprite::createWithSpriteFrameName("snapOffBtn_001.png"_spr), 
 			this, menu_selector(MyGJTransformControl::onSnapBtn));
 		m_fields->m_rotBtn = CCMenuItemSpriteExtra::create(
 			CCSprite::createWithSpriteFrameName("freeRotOffBtn_001.png"_spr), 
@@ -69,8 +131,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		m_fields->m_menu->addChild(m_fields->m_snapBtn);
 		m_fields->m_menu->addChild(m_fields->m_rotBtn);
 
-		m_fields->m_snapBtn->setPosition(ccp(30, 20));
-		m_fields->m_rotBtn->setPosition(ccp(60, 20));
+		m_fields->m_snapBtn->setPosition(ccp(0, 20));
+		m_fields->m_rotBtn->setPosition(ccp(30, 20));
 		
 		// add labels to the buttons
 		auto labelSnap = CCLabelBMFont::create("Snap", "bigFont.fnt");
@@ -89,6 +151,12 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		GLOBAL.m_isFreeRot = false;
 		GLOBAL.m_isRotDirty = false;
 		GLOBAL.m_isSnap = false;
+
+		// add interface node
+		m_fields->m_interface = GJTransformControlInterface::create(this);
+		if (m_fields->m_interface == nullptr) return false;
+		m_fields->m_interface->setInterfaceVisibility(true, true);
+		m_mainNode->addChild(m_fields->m_interface);
 
 		return true;
 	}
@@ -133,7 +201,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		auto aPos = anchor->getPosition();
 		uint8_t snapNodeIndx = 0;
 
-		checkAnchorIsOnEdge(0.05, aPos, &snapNodeIndx);
+		checkAnchorIsOnEdge(MAX_FP_ERROR, aPos, &snapNodeIndx);
 
 		setDisabledSpritesByNodeIndex(snapNodeIndx);
 
@@ -210,7 +278,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		return true;
 	}
 	
-	$override void ccTouchMoved(CCTouch* p0, CCEvent* p1) {
+	$override 
+	void ccTouchMoved(CCTouch* p0, CCEvent* p1) {
 		if (m_touchID != p0->m_nId) return;
 
 		// check if the current button is disabled, don't allow to use it
@@ -265,7 +334,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		}
 	}
 
-	$override void ccTouchEnded(CCTouch* p0, CCEvent* p1) {
+	$override 
+	void ccTouchEnded(CCTouch* p0, CCEvent* p1) {
 		// check what sprites should be disabled depending on where the anchor snaps
 		// (we have to "disable" sprites that are aligned with the anchor because
 		// otherwise we will get the infinite scale when try to use them. In worst case
@@ -279,7 +349,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 			checkAnchorSnaps(limit, aPos, &aPos, &snapNodeIndx);
 		} else {
 			// some sprites may still stay aligned with the anchor even after transform
-			checkAnchorIsOnEdge(0.05, aPos, &snapNodeIndx);
+			checkAnchorIsOnEdge(MAX_FP_ERROR, aPos, &snapNodeIndx);
 		}
 
 		setDisabledSpritesByNodeIndex(snapNodeIndx);
@@ -289,7 +359,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		GJTransformControl::ccTouchEnded(p0, p1);
 	}
 
-	$override void scaleButtons(float scale) {
+	$override 
+	void scaleButtons(float scale) {
 		GJTransformControl::scaleButtons(scale);
 		// fix bug when scaled sprite doesn't match button touch box (scale not btn but menu)
 		if (!m_fields->m_menu) return;
@@ -300,7 +371,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 	void onSnapBtn(CCObject* sender) {
 		GLOBAL.m_isSnap = !GLOBAL.m_isSnap;
-		auto spr = GLOBAL.m_isSnap ? "warpLockOnBtn_001.png" : "warpLockOffBtn_001.png";
+		auto spr = GLOBAL.m_isSnap ? "snapOnBtn_001.png"_spr : "snapOffBtn_001.png"_spr;
 		m_fields->m_snapBtn->setSprite(CCSprite::createWithSpriteFrameName(spr));
 	}
 
@@ -308,7 +379,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		GLOBAL.m_isFreeRot = !GLOBAL.m_isFreeRot;
 		if (GLOBAL.m_isFreeRot) {
 			m_fields->m_rotBtn->setSprite(CCSprite::createWithSpriteFrameName("freeRotOnBtn_001.png"_spr));
-			m_fields->m_disabledSpritesRot = 0b011111111110; // 1...11
+			m_fields->m_disabledSpritesRot = 0b111111111110; // 1...11
 			m_fields->m_lockedRotation = m_mainNode->getRotation();
 		} else {
 			m_fields->m_rotBtn->setSprite(CCSprite::createWithSpriteFrameName("freeRotOffBtn_001.png"_spr));
@@ -360,7 +431,7 @@ class $modify(MyEditorUI, EditorUI) {
 							float rotX, float rotY, float warpX, float warpY) {
 		// we don't need this object anymore
 		if (m_fields->m_isSneaky) {
-			popFakeMainObject();
+			m_selectedObjects->fastRemoveObjectAtIndex(0); // remove sneakyObj
 			m_fields->m_isSneaky = false;
 		}
 		EditorUI::transformObjects(objs, anchor, scaleX, scaleY, rotX, rotY, warpX, warpY);
@@ -395,16 +466,6 @@ class $modify(MyEditorUI, EditorUI) {
 		return true;
 	}
 
-	// removes the first object from selection
-	void popFakeMainObject() {
-		// object stays at the array less than a frame, so assume it can't be removed
-		m_selectedObjects->fastRemoveObjectAtIndex(0); // remove sneakyObj
-		if (m_selectedObjects->count() == 1) {
-			auto obj = m_selectedObjects->objectAtIndex(0);
-			m_selectedObjects->removeObjectAtIndex(0);
-			m_selectedObject = static_cast<GameObject*>(obj);
-		}
-	}
 
 	$override 
 	void updateTransformControl() {
@@ -419,10 +480,47 @@ class $modify(MyEditorUI, EditorUI) {
 
 		EditorUI::updateTransformControl();
 
+		// Now fix everything that we might have messed up
+
 		// in case transformObjects() was not reached
 		if (m_fields->m_isSneaky) {
-			popFakeMainObject();
+			m_selectedObjects->fastRemoveObjectAtIndex(0); // remove sneakyObj
 			m_fields->m_isSneaky = false;
+		}
+
+		if (m_fields->m_isActivate) {
+			// handle situation when only one object is selected
+			if (m_selectedObjects && m_selectedObjects->count() == 1) {
+				auto obj = m_selectedObjects->objectAtIndex(0);
+				m_selectedObjects->removeObjectAtIndex(0);
+				m_selectedObject = static_cast<GameObject*>(obj);
+				// m_transformControl->m_unk1 and editor->m_selectedObjects are the same array,
+				// but when only one object is selected, they must be different
+				CC_SAFE_RELEASE(m_transformControl->m_unk1);
+				m_transformControl->m_unk1 = CCArray::createWithObject(obj);
+				m_transformControl->m_unk1->retain();
+			}
+
+			// if (GLOBAL.m_transformControls) {
+			// 	// fix issue that center isn't centered sometimes
+			// 	// (RobTop uses the center of a group of selected objects, which sometimes 
+			// 	// does not match the center of the interface rectangle, which looks cursed)
+			// 	const auto controls = GLOBAL.m_transformControls;
+			// 	auto anchor = controls->spriteByTag(1);
+			// 	auto spr1 = controls->spriteByTag(9);
+			// 	auto spr2 = controls->spriteByTag(6);
+			// 	// actual center coordinates (now center is at 0,0)
+			// 	auto diff = (spr2->getPosition() + spr1->getPosition()) / 2;
+			// 	if (diff.x > MAX_FP_ERROR || diff.y > MAX_FP_ERROR) {
+			// 		const float rotation = -controls->m_mainNode->getRotation();
+			// 		const double sin = std::sin(rotation*M_PI/180.0);
+			// 		const double cos = std::cos(rotation*M_PI/180.0);
+			// 		const auto anchorRelPos = ccp(cos * diff.x - sin * diff.y, sin * diff.x + cos * diff.y);
+					
+			// 		anchor->setPosition(anchorRelPos);
+			// 		controls->refreshControl();
+			// 	}
+			// }
 		}
 	}
 
