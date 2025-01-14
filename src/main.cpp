@@ -7,7 +7,6 @@ using namespace geode::prelude;
 #define SNAP_COL ccc3(255, 135, 0)
 #define LOCK_COL ccc3(155, 155, 155)
 #define WHITE_COL ccc3(255, 255, 255)
-#define INTERFACE_COLOR ccc4(255, 255, 0, 255)
 
 // max error in fp measurements (in points)
 #define MAX_FP_ERROR 0.01f
@@ -22,9 +21,14 @@ struct {
 	MyGJTransformControl* m_transformControls = nullptr;
 	// mod settings
 	struct {
-		int a;
+		ccColor4B m_interfaceCol;
+		bool m_centerSnap; // anchor also snaps to the center
+		int m_showInterface; // 1 - never, 2 - always, 3 - on change
 		void update() {
-
+			m_interfaceCol = Mod::get()->getSettingValue<cocos2d::ccColor4B>("interface-color");
+			m_centerSnap = Mod::get()->getSettingValue<bool>("snap-center");
+			m_showInterface = std::atoi(Mod::get()->getSettingValue<std::string>("show-interface").c_str());
+			if (m_showInterface < 1 || m_showInterface > 3) m_showInterface = 1;
 		}
 	} m_settings;
 } GLOBAL;
@@ -72,7 +76,7 @@ public:
 	}
 
 	void draw() override {
-		ccDrawColor4B(INTERFACE_COLOR);
+		ccDrawColor4B(GLOBAL.m_settings.m_interfaceCol);
 		if (m_visibleRect) {
 			auto tl = m_transformControl->spriteByTag(6);
 			auto br = m_transformControl->spriteByTag(9);
@@ -155,8 +159,12 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		// add interface node
 		m_fields->m_interface = GJTransformControlInterface::create(this);
 		if (m_fields->m_interface == nullptr) return false;
-		m_fields->m_interface->setInterfaceVisibility(true, true);
 		m_mainNode->addChild(m_fields->m_interface);
+
+		// show interface: 1 - never, 2 - always, 3 - on change
+		if (GLOBAL.m_settings.m_showInterface == 2)
+			m_fields->m_interface->setInterfaceVisibility(true, true);
+		else m_fields->m_interface->setInterfaceVisibility(false, false);
 
 		return true;
 	}
@@ -210,18 +218,23 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 	// return true and set snapCoords and snapSpriteIndex if anchor snaps
 	bool checkAnchorSnaps(const float limit, const CCPoint anchor, CCPoint* const snapCoords, 
-							uint8_t* const spriteIndex) {
+							uint8_t* const spriteIndex, bool checkCenter) {
 		// math code alert! - convert anchor pos to mainNode coords
 		const double sin = std::sin(m_mainNode->getRotation()*M_PI/180.0);
 		const double cos = std::cos(m_mainNode->getRotation()*M_PI/180.0);
 		const auto anchorRelPos = ccp(cos * anchor.x - sin * anchor.y, sin * anchor.x + cos * anchor.y);
-		// check distance between the anchor and the sprite
-		for (int i = 2; i < 10; i++) {
-			auto node = spriteByTag(i);
-			auto distVec = anchorRelPos - node->getPosition();
+		// check distance between the anchor and other sprites
+		for (int i = 1; i < 10; i++) {
+			CCPoint nodePos;
+			if (i != 1) {
+				nodePos = spriteByTag(i)->getPosition();
+			} else {
+				if (!checkCenter) continue;
+				nodePos = (spriteByTag(7)->getPosition() + spriteByTag(8)->getPosition()) / 2.0; // center
+			}
+			CCPoint distVec = anchorRelPos - nodePos;
 			auto distSq = distVec.x * distVec.x + distVec.y * distVec.y;
 			if (distSq < limit * limit) {
-				auto nodePos = node->getPosition();
 				*snapCoords = ccp(cos * nodePos.x + sin * nodePos.y, -sin * nodePos.x + cos * nodePos.y);
 				*spriteIndex = i;
 				return true;
@@ -298,7 +311,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 				// min dist after which the anchor snaps to the node
 				const float limit = anchor->getScale() * 18;
 				uint8_t snapNodeIndx;
-				if (checkAnchorSnaps(limit, aPos, &aPos, &snapNodeIndx)) {
+				if (checkAnchorSnaps(limit, aPos, &aPos, &snapNodeIndx, GLOBAL.m_settings.m_centerSnap)) {
 					// anchor was moved and we've just attached to the node
 					anchor->setColor(SNAP_COL);
 					anchor->setPosition(aPos);
@@ -329,8 +342,12 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 			if (GLOBAL.m_isFreeRot) {
 				GLOBAL.m_isRotDirty = true;
 				EditorUI::get()->transformRotationChanged(m_fields->m_lockedRotation);
-			}
-			
+			}	
+		}
+		
+		// interface (1 - never, 2 - always, 3 - on change)
+		if (GLOBAL.m_settings.m_showInterface == 3) {
+			m_fields->m_interface->setInterfaceVisibility(true, true);
 		}
 	}
 
@@ -346,7 +363,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 		if (m_transformButtonType == 1 && GLOBAL.m_isSnap) { 
 			float limit = anchor->getScale() * 18; // min dist after which the anchor snaps to the node
-			checkAnchorSnaps(limit, aPos, &aPos, &snapNodeIndx);
+			checkAnchorSnaps(limit, aPos, &aPos, &snapNodeIndx, GLOBAL.m_settings.m_centerSnap);
 		} else {
 			// some sprites may still stay aligned with the anchor even after transform
 			checkAnchorIsOnEdge(MAX_FP_ERROR, aPos, &snapNodeIndx);
@@ -357,6 +374,20 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		updateDisabledSprites();
 		
 		GJTransformControl::ccTouchEnded(p0, p1);
+
+		// interface (1 - never, 2 - always, 3 - on change)
+		if (GLOBAL.m_settings.m_showInterface == 3) {
+			m_fields->m_interface->setInterfaceVisibility(false, false);
+		}
+	}
+
+	$override 
+	void ccTouchCancelled(CCTouch* p0, CCEvent* p1) {
+		GJTransformControl::ccTouchCancelled(p0, p1);
+		// interface (1 - never, 2 - always, 3 - on change)
+		if (GLOBAL.m_settings.m_showInterface == 3) {
+			m_fields->m_interface->setInterfaceVisibility(false, false);
+		}
 	}
 
 	$override 
@@ -420,6 +451,7 @@ class $modify(MyEditorUI, EditorUI) {
 			GLOBAL.m_isSnap = false;
 			GLOBAL.m_isFreeRot = false;
 			GLOBAL.m_isRotDirty = false;
+			GLOBAL.m_settings.update();
 			m_sneakyObj = GameObject::createWithKey(929);
 			m_sneakyObj->commonSetup();
 			m_sneakyObj->m_outerSectionIndex = -1;
@@ -564,4 +596,4 @@ class $modify(MyEditorUI, EditorUI) {
 		}
 	}
 
-};
+}; // :3

@@ -8,14 +8,55 @@
 	},
 	"id": "razoom.improved_transform_controls",
 	"name": "Improved Transform Controls",
+	"description": "Adds useful options to transform controls",
+	"tags": ["editor", "utility"],
 	"version": "v1.0.0",
 	"developer": "RaZooM",
-	"description": "Adds useful options to transform controls",
+	"links": {
+		"source": "https://github.com/RazoomGD/geode-improved-transform-controls",
+		"community": "https://discord.gg/wcWvtKHP8n"
+	},
+	"dependencies": [
+		{
+			"id": "geode.node-ids",
+			"importance": "required",
+			"version": ">=1.17.0"
+		}
+	],
 	"resources": {
 		"spritesheets": {
 			"ITCSpritesheet": [
 				"resources/*.png"
 			]
+		}
+	},
+	"settings": {
+		"title-1": {
+			"type": "title",
+			"name": "Options"
+		},
+		"snap-center": {
+			"type": "bool",
+			"name": "Snap to the center",
+			"description": "Allow you to snap not only to the corner points but also to the center",
+			"default": false
+		}, 
+
+		"title-2": {
+			"type": "title",
+			"name": "Interface"
+		},
+		"show-interface": {
+			"type": "string",
+			"name": "Show transform rectangle",
+			"description": "Show the rectangle around selected objects during the transform",
+			"default": "3: on change",
+			"one-of": ["1: always", "2: never", "3: on change"]
+		},
+		"interface-color": {
+			"type": "rgba",
+			"name": "Transform rectangle color",
+			"default": [255, 255, 0, 255]
 		}
 	}
 }
