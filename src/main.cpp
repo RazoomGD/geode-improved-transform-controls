@@ -22,7 +22,7 @@ struct {
 	// mod settings
 	struct {
 		ccColor4B m_interfaceCol;
-		bool m_centerSnap; // anchor also snaps to the center
+		bool m_centerSnap; // if anchor also snaps to the center
 		int m_showInterface; // 1 - never, 2 - always, 3 - on change
 		void update() {
 			m_interfaceCol = Mod::get()->getSettingValue<cocos2d::ccColor4B>("interface-color");
@@ -104,7 +104,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		CCMenuItemSpriteExtra* m_rotBtn;
 		CCMenuItemSpriteExtra* m_snapBtn;
 		uint16_t m_disabledSpritesRot = 0;  // sprites disabled because of free rotation or snap
-		uint16_t m_disabledSpritesSnap = 0; // both arebit arrays (lowest 12 bits used - one for each sprite)
+		uint16_t m_disabledSpritesSnap = 0; // both are bit arrays (lowest 12 bits used - one for each sprite)
 		Ref<GJTransformControlInterface> m_interface;
 
 		~Fields() {GLOBAL.m_transformControls = nullptr;}
@@ -174,7 +174,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		m_fields->m_disabledSpritesSnap = 0;
 		m_fields->m_disabledSpritesRot = 0;
 		if (GLOBAL.m_isFreeRot) {
-			m_fields->m_rotBtn->setSprite(CCSprite::createWithSpriteFrameName("freeRotOffBtn_001.png"_spr));
+			m_fields->m_rotBtn->setSprite(
+				CCSprite::createWithSpriteFrameName("freeRotOffBtn_001.png"_spr));
 			GLOBAL.m_isFreeRot = false;
 		}
 	}
@@ -222,7 +223,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		// math code alert! - convert anchor pos to mainNode coords
 		const double sin = std::sin(m_mainNode->getRotation()*M_PI/180.0);
 		const double cos = std::cos(m_mainNode->getRotation()*M_PI/180.0);
-		const auto anchorRelPos = ccp(cos * anchor.x - sin * anchor.y, sin * anchor.x + cos * anchor.y);
+		const auto anchorRelPos = ccp(
+			cos * anchor.x - sin * anchor.y, sin * anchor.x + cos * anchor.y);
 		// check distance between the anchor and other sprites
 		for (int i = 1; i < 10; i++) {
 			CCPoint nodePos;
@@ -230,12 +232,14 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 				nodePos = spriteByTag(i)->getPosition();
 			} else {
 				if (!checkCenter) continue;
-				nodePos = (spriteByTag(7)->getPosition() + spriteByTag(8)->getPosition()) / 2.0; // center
+				// get center
+				nodePos = (spriteByTag(7)->getPosition() + spriteByTag(8)->getPosition()) / 2.0;
 			}
 			CCPoint distVec = anchorRelPos - nodePos;
 			auto distSq = distVec.x * distVec.x + distVec.y * distVec.y;
 			if (distSq < limit * limit) {
-				*snapCoords = ccp(cos * nodePos.x + sin * nodePos.y, -sin * nodePos.x + cos * nodePos.y);
+				*snapCoords = ccp(
+					cos * nodePos.x + sin * nodePos.y, -sin * nodePos.x + cos * nodePos.y);
 				*spriteIndex = i;
 				return true;
 			}
@@ -249,7 +253,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		// math code alert! - convert anchor pos to mainNode coords
 		const double sin = std::sin(m_mainNode->getRotation()*M_PI/180.0);
 		const double cos = std::cos(m_mainNode->getRotation()*M_PI/180.0);
-		const auto anchorRelPos = ccp(cos * anchor.x - sin * anchor.y, sin * anchor.x + cos * anchor.y);
+		const auto anchorRelPos = ccp(
+			cos * anchor.x - sin * anchor.y, sin * anchor.x + cos * anchor.y);
 		// vertices cw
 		CCPoint v[] = {spriteByTag(6)->getPosition(), spriteByTag(7)->getPosition(), 
 						spriteByTag(9)->getPosition(), spriteByTag(8)->getPosition()};
@@ -409,11 +414,13 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 	void onRotBtn(CCObject* sender) {
 		GLOBAL.m_isFreeRot = !GLOBAL.m_isFreeRot;
 		if (GLOBAL.m_isFreeRot) {
-			m_fields->m_rotBtn->setSprite(CCSprite::createWithSpriteFrameName("freeRotOnBtn_001.png"_spr));
+			m_fields->m_rotBtn->setSprite(
+				CCSprite::createWithSpriteFrameName("freeRotOnBtn_001.png"_spr));
 			m_fields->m_disabledSpritesRot = 0b111111111110; // 1...11
 			m_fields->m_lockedRotation = m_mainNode->getRotation();
 		} else {
-			m_fields->m_rotBtn->setSprite(CCSprite::createWithSpriteFrameName("freeRotOffBtn_001.png"_spr));
+			m_fields->m_rotBtn->setSprite(
+				CCSprite::createWithSpriteFrameName("freeRotOffBtn_001.png"_spr));
 			m_fields->m_disabledSpritesRot = 0;
 			if (GLOBAL.m_isRotDirty) {
 				GLOBAL.m_freeRotFinalAngle = m_mainNode->getRotation();
@@ -547,7 +554,8 @@ class $modify(MyEditorUI, EditorUI) {
 			// 		const float rotation = -controls->m_mainNode->getRotation();
 			// 		const double sin = std::sin(rotation*M_PI/180.0);
 			// 		const double cos = std::cos(rotation*M_PI/180.0);
-			// 		const auto anchorRelPos = ccp(cos * diff.x - sin * diff.y, sin * diff.x + cos * diff.y);
+			// 		const auto anchorRelPos = ccp(
+			//			cos * diff.x - sin * diff.y, sin * diff.x + cos * diff.y);
 					
 			// 		anchor->setPosition(anchorRelPos);
 			// 		controls->refreshControl();
