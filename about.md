@@ -14,6 +14,7 @@ This mod adds useful features to editor <cy>Transform Controls</c>.
 This mod also fixes some <cl>RobTop's</c> bugs:
 - Fixed button sprite scale issue (when button sprite size doesn't match the button touch box)
 - Fixed overlap of buttons with the controls after certain transforms
+- Fixed RobTop's <cr>crash</c> when transforming extremely thin objects
 
 ---
 

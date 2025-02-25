@@ -465,6 +465,12 @@ class $modify(MyEditorUI, EditorUI) {
 		}
 	};
 
+	// $override
+	// void moveObject(GameObject* p0, CCPoint p1) {
+	// 	if (std::isnan(p1.x) || std::isnan(p1.y)) return;
+	// 	EditorUI::moveObject(p0, p1);
+	// }
+
 	$override 
 	void transformObjects(CCArray* objs, CCPoint anchor, float scaleX, float scaleY, 
 							float rotX, float rotY, float warpX, float warpY) {
@@ -473,6 +479,19 @@ class $modify(MyEditorUI, EditorUI) {
 			m_selectedObjects->fastRemoveObjectAtIndex(0); // remove sneakyObj
 			m_fields->m_isSneaky = false;
 		}
+
+		// fix RobTop's crash with extremely thin objects
+		auto editor = EditorUI::get();
+		if (warpX == 45 && warpY == 45) {
+			editor->transformSkewXChanged(44.9f);
+			editor->transformSkewYChanged(44.9f);
+		} else if (warpX == -45 && warpY == -45) {
+			editor->transformSkewXChanged(-44.9f);
+			editor->transformSkewYChanged(-44.9f);
+		}
+		// auto obj = as<GameObject*>(objs->objectAtIndex(0));
+		// log::debug("rotX={}; rotY={}", obj->getRotationX(), obj->getRotationY());
+		// log::debug("anchor: {}, scaleX: {}, scaleY: {}, rotX: {}, rotY: {}, warpX: {}, warpY: {}", anchor, scaleX, scaleY, rotX, rotY, warpX, warpY);
 		EditorUI::transformObjects(objs, anchor, scaleX, scaleY, rotX, rotY, warpX, warpY);
 		return;
 	}

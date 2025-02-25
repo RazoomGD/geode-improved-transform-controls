@@ -1,5 +1,5 @@
 {
-	"geode": "4.0.0",
+	"geode": "4.2.0",
 	"gd": {
 		"win": "2.2074",
 		"android": "2.2074"
@@ -8,7 +8,7 @@
 	"name": "Improved Transform Controls",
 	"description": "Adds useful options to transform controls",
 	"tags": ["editor", "utility"],
-	"version": "v1.0.0",
+	"version": "v1.0.1",
 	"developer": "RaZooM",
 	"links": {
 		"source": "https://github.com/RazoomGD/geode-improved-transform-controls",
