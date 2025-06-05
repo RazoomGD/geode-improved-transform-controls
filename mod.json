@@ -3,14 +3,20 @@
 	"gd": {
 		"win": "2.2074",
 		"android": "2.2074",
-		"mac": "2.2074",
-		"ios": "2.2074"
+		"mac": "2.2074"
 	},
-	"id": "razoom.transform_controls_2",
-	"name": "Transform Controls 2",
-	"version": "v1.0.0",
+	
+	"id": "razoom.improved_transform_controls",
+	"name": "Improved Transform Controls",
+	"version": "v1.0.1",
 	"developer": "RaZooM",
-	"description": "gfcvj",
+	"description": "Adds useful options to transform controls",
+	"tags": ["editor", "utility"],
+
+	"links": {
+		"source": "https://github.com/RazoomGD/geode-improved-transform-controls",
+		"community": "https://discord.gg/wcWvtKHP8n"
+	},
 
 	"resources": {
 		"spritesheets": {
