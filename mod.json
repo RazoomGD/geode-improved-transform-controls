@@ -1,0 +1,37 @@
+{
+	"geode": "4.5.0",
+	"gd": {
+		"win": "2.2074",
+		"android": "2.2074",
+		"mac": "2.2074",
+		"ios": "2.2074"
+	},
+	"id": "razoom.transform_controls_2",
+	"name": "Transform Controls 2",
+	"version": "v1.0.0",
+	"developer": "RaZooM",
+	"description": "gfcvj",
+
+	"resources": {
+		"spritesheets": {
+			"ITCSpritesheet": [
+				"resources/*.png"
+			]
+		}
+	},
+
+	"settings": {
+		"show-interface": {
+			"type": "string",
+			"name": "Show transform rectangle",
+			"description": "Show the rectangle around selected objects during the transform",
+			"default": "3: on change",
+			"one-of": ["1: always", "2: never", "3: on change"]
+		},
+		"interface-color": {
+			"type": "rgba",
+			"name": "Transform rectangle color",
+			"default": [255, 255, 0, 255]
+		}
+	}
+}
