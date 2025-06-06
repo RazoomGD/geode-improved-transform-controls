@@ -171,4 +171,24 @@ class $modify(MyEditorUI, EditorUI) {
 		}
 	}
 
+	#ifdef GEODE_IS_MACOS
+	$override
+	void keyDown(enumKeyCodes p0) {
+		auto dispatcher = CCKeyboardDispatcher::get();
+		if (m_editorLayer->m_playbackMode == PlaybackMode::Playing || p0 != KEY_Z || dispatcher->getControlKeyPressed()) {
+			return EditorUI::keyDown(p0);
+		}
+
+		auto undo = dispatcher->getShiftKeyPressed() ? m_editorLayer->m_redoObjects : m_editorLayer->m_undoObjects;
+		if (m_transformControl->isVisible() && undo && undo->count()) {
+			deactivateTransformControl();
+			float rot = getAngleForUndoObject(static_cast<UndoObject*>(undo->lastObject()));
+			EditorUI::keyDown(p0);
+			activateTransformControlWithAngle(rot);
+		} else {
+			EditorUI::keyDown(p0);
+		}
+	}
+	#endif
+
 };
