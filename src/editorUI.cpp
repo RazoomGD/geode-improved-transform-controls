@@ -1,19 +1,8 @@
 class $modify(MyEditorUI, EditorUI) {
 	struct Fields {
-		// bool m_isActivate = false; // is activateTransformControl func on the call stack
 		float m_initialAngle = 0;
+		bool m_useAngle = false;
 		std::unordered_map<UndoObject*, float> m_transformAnglesForUndoObjects;
-		// bool m_isSneaky = false; // is the fake main object used
-		// Ref<GameObject> m_sneakyObj;
-		// Fields() {
-		// 	GLOBAL.m_isSnap = false;
-		// 	GLOBAL.m_isFreeRot = false;
-		// 	GLOBAL.m_isRotDirty = false;
-		// 	GLOBAL.m_settings.update();
-		// 	m_sneakyObj = GameObject::createWithKey(929);
-		// 	m_sneakyObj->commonSetup();
-		// 	m_sneakyObj->m_outerSectionIndex = -1;
-		// }
 	};
 
 	void addAngleToUndoObject(UndoObject* undo, float angle) {
@@ -32,79 +21,44 @@ class $modify(MyEditorUI, EditorUI) {
 	// 	EditorUI::moveObject(p0, p1);
 	// }
 
-	bool init(LevelEditorLayer* editorLayer) {
-		if (!EditorUI::init(editorLayer)) return false;
-		// auto sl1 = Slider::create(this, menu_selector(MyEditorUI::onSlider1));
-		// auto sl2 = Slider::create(this, menu_selector(MyEditorUI::onSlider2));
-		auto btn1 = CCMenuItemSpriteExtra::create(ButtonSprite::create("log"), this, menu_selector(MyEditorUI::onBtn1));
-		auto btn2 = CCMenuItemSpriteExtra::create(ButtonSprite::create("count"), this, menu_selector(MyEditorUI::onBtn2));
-		// auto btn3 = CCMenuItemSpriteExtra::create(ButtonSprite::create("log"), this, menu_selector(MyEditorUI::onBtn3));
-
-		auto base = CCMenu::create();
-		base->setScale(0.5);
-		base->setContentSize({0,0});
-		base->setPosition({0,0});
-
-		addChild(base);
-
-		// base->addChild(sl1, 100);
-		// base->addChild(sl2, 100);
-		base->addChild(btn1, 100);
-		base->addChild(btn2, 100);
-		// base->addChild(btn3, 100);
-
-		// sl1->setPosition({250, 550});
-		// sl2->setPosition({250, 500});
-		btn1->setPosition({200, 450});
-		btn2->setPosition({300, 450});
-		// btn3->setPosition({150, 450});
-		return true;
-	}
-
-	void onBtn2(CCObject*) {
-        // log::debug("selected {}", getSelectedObjects()->count());
-        // activateTransformControlWithAngle(45);
-		log::debug("sel {}",m_rotateBtn->isSelected());
-	}
-
-	void onBtn1(CCObject*) {
-		log::debug("last undo obj--------------------------------");
-		auto obj = static_cast<UndoObject*>(LevelEditorLayer::get()->m_undoObjects->lastObject());
-		if (obj->m_command == UndoCommand::Transform) {
-			auto t = obj->m_transformState;
-			log::debug("objects.count()={}; undoTransform={}", obj->m_objects->count(), obj->m_undoTransform);
-			log::debug("=======================================");
-			log::debug("GameObject copy {}", obj->m_objectCopy);
-			if (auto oc = obj->m_objectCopy) {
-				log::debug("m_object={}", oc->m_object);
-				log::debug("m_position={}", oc->m_position);
-				log::debug("m_rotationX={}", oc->m_rotationX);
-				log::debug("m_rotationY={}", oc->m_rotationY);
-				log::debug("m_isFlipX={}", oc->m_isFlipX);
-				log::debug("m_isFlipY={}", oc->m_isFlipY);
-				log::debug("m_customScaleX={}", oc->m_customScaleX);
-				log::debug("m_customScaleY={}", oc->m_customScaleY);
-			}
-			log::debug("=======================================");
-			log::debug("m_scaleX={}", t.m_scaleX);
-			log::debug("m_scaleY={}", t.m_scaleY);
-			log::debug("m_angleX={}", t.m_angleX);
-			log::debug("m_angleY={}", t.m_angleY);
-			log::debug("m_skewX={}", t.m_skewX);
-			log::debug("m_skewY={}", t.m_skewY);
-			log::debug("m_transformRotation={}", t.m_transformRotation);
-			log::debug("m_transformReset={}", t.m_transformReset);
-			log::debug("m_transformRotationX={}", t.m_transformRotationX);
-			log::debug("m_transformRotationY={}", t.m_transformRotationY);
-			log::debug("m_transformPosition={}", t.m_transformPosition);
-			log::debug("m_transformSkewX={}", t.m_transformSkewX);
-			log::debug("m_transformSkewY={}", t.m_transformSkewY);
-			log::debug("m_transformScaleX={}", t.m_transformScaleX);
-			log::debug("m_transformScaleY={}", t.m_transformScaleY);
-		} else {
-			log::debug("wrong undo command {}", (int)obj->m_command);
-		}
-	}
+	// void onBtn1(CCObject*) {
+	// 	log::debug("last undo obj--------------------------------");
+	// 	auto obj = static_cast<UndoObject*>(LevelEditorLayer::get()->m_undoObjects->lastObject());
+	// 	if (obj->m_command == UndoCommand::Transform) {
+	// 		auto t = obj->m_transformState;
+	// 		log::debug("objects.count()={}; undoTransform={}", obj->m_objects->count(), obj->m_undoTransform);
+	// 		log::debug("=======================================");
+	// 		log::debug("GameObject copy {}", obj->m_objectCopy);
+	// 		if (auto oc = obj->m_objectCopy) {
+	// 			log::debug("m_object={}", oc->m_object);
+	// 			log::debug("m_position={}", oc->m_position);
+	// 			log::debug("m_rotationX={}", oc->m_rotationX);
+	// 			log::debug("m_rotationY={}", oc->m_rotationY);
+	// 			log::debug("m_isFlipX={}", oc->m_isFlipX);
+	// 			log::debug("m_isFlipY={}", oc->m_isFlipY);
+	// 			log::debug("m_customScaleX={}", oc->m_customScaleX);
+	// 			log::debug("m_customScaleY={}", oc->m_customScaleY);
+	// 		}
+	// 		log::debug("=======================================");
+	// 		log::debug("m_scaleX={}", t.m_scaleX);
+	// 		log::debug("m_scaleY={}", t.m_scaleY);
+	// 		log::debug("m_angleX={}", t.m_angleX);
+	// 		log::debug("m_angleY={}", t.m_angleY);
+	// 		log::debug("m_skewX={}", t.m_skewX);
+	// 		log::debug("m_skewY={}", t.m_skewY);
+	// 		log::debug("m_transformRotation={}", t.m_transformRotation);
+	// 		log::debug("m_transformReset={}", t.m_transformReset);
+	// 		log::debug("m_transformRotationX={}", t.m_transformRotationX);
+	// 		log::debug("m_transformRotationY={}", t.m_transformRotationY);
+	// 		log::debug("m_transformPosition={}", t.m_transformPosition);
+	// 		log::debug("m_transformSkewX={}", t.m_transformSkewX);
+	// 		log::debug("m_transformSkewY={}", t.m_transformSkewY);
+	// 		log::debug("m_transformScaleX={}", t.m_transformScaleX);
+	// 		log::debug("m_transformScaleY={}", t.m_transformScaleY);
+	// 	} else {
+	// 		log::debug("wrong undo command {}", (int)obj->m_command);
+	// 	}
+	// }
 
 	$override 
 	void transformObjects(CCArray* objs, CCPoint anchor, float scaleX, float scaleY, 
@@ -125,12 +79,15 @@ class $modify(MyEditorUI, EditorUI) {
 	void activateTransformControlWithAngle(float angle) {
 		log::debug("activate w angle {}", angle);
 		m_fields->m_initialAngle = angle;
+		m_fields->m_useAngle = true;
 		EditorUI::deactivateRotationControl();
-		activateTransformControl(nullptr);
-		m_fields->m_initialAngle = 0;
+		EditorUI::activateTransformControl(nullptr);
+		m_fields->m_useAngle = false;
         m_transformControl->refreshControl();
 	}
 
+
+	$override
 	void activateTransformControl(CCObject* p0) {
 		// force toggle off rotation mode (fix to RobTop's bugs)
 		if (GameManager::get()->getGameVariable("0007")) {
@@ -145,7 +102,7 @@ class $modify(MyEditorUI, EditorUI) {
 	$override
 	void updateTransformControl() {
 		auto selected = getSelectedObjects();
-		if (m_fields->m_initialAngle == 0 || selected->count() == 0) {
+		if (!m_fields->m_useAngle || selected->count() == 0) {
 			return EditorUI::updateTransformControl();
 		}
 
@@ -169,12 +126,12 @@ class $modify(MyEditorUI, EditorUI) {
 		}
 	}
 
+
 	$override
 	void transformChangeBegin() {
-		EditorUI::transformChangeBegin();
+		EditorUI::transformChangeBegin(); // this function add undo object
 		if (auto obj = LevelEditorLayer::get()->m_undoObjects->lastObject()) {
 			auto rot1 = m_transformControl->m_mainNode->getRotation();
-			// auto rot2 = static_cast<GameObject*>(m_transformControl->m_objects->firstObject())->getRotation();
 			addAngleToUndoObject(static_cast<UndoObject*>(obj), rot1);
 		}
 	}
@@ -184,6 +141,7 @@ class $modify(MyEditorUI, EditorUI) {
 	// 	// log::debug("anchor moved {}", newWorldCoords);
 	// 	EditorUI::anchorPointMoved(newWorldCoords);
 	// }
+
 
 	// prevent undo/redo bugs
 	$override
@@ -197,37 +155,20 @@ class $modify(MyEditorUI, EditorUI) {
 		} else {
 			EditorUI::undoLastAction(p0);
 		}
-        // fix bug when transform controls stay visible after undoing object placing
-
 	}
 
-	// $override
-	// void redoLastAction(CCObject* p0) {
-	// 	EditorUI::redoLastAction(p0);
-	// 	if (auto controls = GLOBAL.m_transformControls) {
-	// 		if (controls->isVisible()) {
-	// 			controls->checkAndUpdateDisabledSpritesForCurrentAnchorPosition();
-	// 		}
-	// 	}
-	// }
 
-	// $override 
-	// void activateTransformControl(CCObject* p0) {
-	// 	// if (auto controls = GLOBAL.m_transformControls) {
-	// 	// 	controls->prepareToActivate();
-	// 	// }
-
-	// 	m_fields->m_isActivate = true;
-	// 	EditorUI::activateTransformControl(p0);
-	// 	m_fields->m_isActivate = false;
-
-	// 	// GLOBAL.m_isRotDirty = false;
-
-	// 	// if (auto controls = GLOBAL.m_transformControls) {
-	// 	// 	if (controls->isVisible()) {
-	// 	// 		controls->updateDisabledSprites();
-	// 	// 	}
-	// 	// }
-	// }
+	$override
+	void redoLastAction(CCObject* p0) {
+		auto redo = LevelEditorLayer::get()->m_redoObjects;
+		if (m_transformControl->isVisible() && redo && redo->count()) {
+			deactivateTransformControl();
+			float rot = getAngleForUndoObject(static_cast<UndoObject*>(redo->lastObject()));
+			EditorUI::redoLastAction(p0);
+			activateTransformControlWithAngle(rot);
+		} else {
+			EditorUI::redoLastAction(p0);
+		}
+	}
 
 };

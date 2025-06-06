@@ -2,7 +2,7 @@
 
 This mod adds useful features to editor <cy>Transform Controls</c>.
 
-## Features
+## Quick explanation of features
 - <cg>Independent (free) rotation</c> - allows you to adjust transform interface rotation without the rotation of transformed objects
 - <cg>Snap rotation</c> - allows you to snap the rotation to 90 degree and the anchor position
 - <cg>Snap anchor position</c> - allows you to snap the anchor to the transform points

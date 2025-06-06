@@ -4,7 +4,7 @@
 
 <img src="logo.png" width="150" alt="made by RaZooM" />
 
-Geometry Dash mod for grouping objects in the editor tabs. 
+Geometry Dash mod that improves default transform controls
 
 Check: 
 - [about](./about.md) - for general info
