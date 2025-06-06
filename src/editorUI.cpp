@@ -77,7 +77,7 @@ class $modify(MyEditorUI, EditorUI) {
 
 
 	void activateTransformControlWithAngle(float angle) {
-		log::debug("activate w angle {}", angle);
+		// log::debug("activate w angle {}", angle);
 		m_fields->m_initialAngle = angle;
 		m_fields->m_useAngle = true;
 		EditorUI::deactivateRotationControl();

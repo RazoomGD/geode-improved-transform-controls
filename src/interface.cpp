@@ -2,7 +2,6 @@ class GJTransformControlInterface : public CCNode {
 private:
 	GJTransformControl* m_transformControl;
 	bool m_visibleRect = false;
-	bool m_visibleRot = false;
 public:
 	static GJTransformControlInterface* create(GJTransformControl* transformControl) {
 		auto ret = new GJTransformControlInterface();
@@ -34,7 +33,6 @@ public:
 			auto l = m_transformControl->spriteByTag(2);
 			auto r = m_transformControl->spriteByTag(3);
 			ccDrawRect(tl->getPosition(), br->getPosition());
-
 			ccDrawLine(t->getPosition(),b->getPosition());
 			ccDrawLine(l->getPosition(), r->getPosition());
 		}

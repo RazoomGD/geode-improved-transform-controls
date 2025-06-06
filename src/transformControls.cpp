@@ -165,16 +165,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 		m_fields->m_freeRot = true;
 		m_transformButtonType = 12;
-
-		// auto center = box.origin + box.size / 2;
-		// auto dist = (center - nodePoint) * spr->getScale();
-		// auto rot = -spr->getRotation() / 180.f * M_PI;
-		// auto cos = std::cos(rot);
-		// auto sin = std::sin(rot);
-		// m_cursorDifference = ccp(dist.x * cos - dist.y * sin, dist.x * sin + dist.y * cos);
-
 		m_cursorDifference = box.origin + box.size / 2 - nodePoint;
-
 		return true;
 	}
 
@@ -290,7 +281,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 			}
 
 			m_mainNode->setRotation(newRot);
-            updateButtons(false, false);
+            GJTransformControl::updateButtons(false, false);
 
 		} else {
 			// rotSnap 
@@ -309,7 +300,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 						m_mainNode->setRotation(newRot);
 						m_delegate->transformRotationChanged(newRot);
 						rotationSnapped = true;
-						updateButtons(false, false);
+						GJTransformControl::updateButtons(false, false);
 					}
 				}
 			}
