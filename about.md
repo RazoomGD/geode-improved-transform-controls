@@ -1,17 +1,21 @@
 # Improved Transform Controls
 
-This mod adds useful features to editor <cy>Transform Controls</c>.
+This mod enhances the default <cy>Transform (warp) Controls</c>.
 
-## Quick explanation of features
-- <cg>Independent (free) rotation</c> - allows you to adjust transform interface rotation without the rotation of transformed objects
-- <cg>Snap rotation</c> - allows you to snap the rotation to 90 degree and the anchor position
-- <cg>Snap anchor position</c> - allows you to snap the anchor to the transform points
-- <cg>Visible rectangle</c> - shows the transform rectangle
+# Overview
 
----
+**<cj>This mod adds 3 new buttons to the transform controls menu:</c>**
+- <cg>Anchor</c>: when disabled anchor all transformations are relative not to the anchor but to the opposite side.
+- <cg>Snap</c>:
+  - snap rotation to the multiple of 90 degrees angles
+  - snap positions of pivot points to the grid (works only when rotation is multiple of 90)
+- <cg>Free rotation</c>: rotate transform interface without rotating transformed objects
 
-## Bugfixes
-This mod also fixes some <cl>RobTop's</c> bugs:
+**<cy>Mod also adds some nice features such as:</c>**
+- Visible transform rectangle
+- Keeping transform interface buttons vertical during rotation
+
+**<cl>And fixes some RobTop's bugs:</c>**
 - Fixed button sprite scale issue (when button sprite size doesn't match the button touch box)
 - Fixed overlap of buttons with the controls after certain transforms
 - Fixed RobTop's <cr>crash</c> when transforming extremely thin objects
