@@ -28,6 +28,36 @@
 	},
 
 	"settings": {
+		"t1": {
+			"type": "title",
+			"name": "Options"
+		},
+		"button-scale": {
+			"type": "float",
+			"default": 1.0,
+			"name": "Menu scale",
+			"description": "Scale of the interface buttons",
+			"max": 2.0,
+			"min": 0.2,
+			"control": {
+				"big-arrows": false,
+				"arrows": true,
+				"arrow-step": 0.1,
+				"input": true,
+				"slider": true,
+				"slider-step": 0.1
+			}
+		},
+		"no-freerot":{
+			"type": "bool",
+			"default": false,
+			"name": "'FreeRot' always enabled",
+			"description": "This option makes Free Rotation UI element always visible and hides the 'FreeRot' button \n(enable this if you this if you think that 4 buttons is too much for that menu)"
+		},
+		"t2": {
+			"type": "title",
+			"name": "Interface"
+		},
 		"show-interface": {
 			"type": "string",
 			"name": "Show transform rectangle",
