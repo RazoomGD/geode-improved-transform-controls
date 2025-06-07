@@ -63,7 +63,7 @@
 			"name": "Show transform rectangle",
 			"description": "Show the rectangle around selected objects during the transform",
 			"default": "3: on change",
-			"one-of": ["1: always", "2: never", "3: on change"]
+			"one-of": ["1: never", "2: always", "3: on change"]
 		},
 		"interface-color": {
 			"type": "rgba",

@@ -127,13 +127,29 @@ class $modify(MyEditorUI, EditorUI) {
 	}
 
 
+	// ! For some reason just existence of this hook crashes the game on Android
+	// $override
+	// void transformChangeBegin() {
+	// 	EditorUI::transformChangeBegin(); // this function add undo object
+	// 	auto undo = LevelEditorLayer::get()->m_undoObjects;
+	// 	if (undo && undo->count()) {
+	// 		auto rot1 = m_transformControl->m_mainNode->getRotation();
+	// 		addAngleToUndoObject(static_cast<UndoObject*>(undo->lastObject()), rot1);
+	// 	}
+	// }
+
+
 	$override
-	void transformChangeBegin() {
-		EditorUI::transformChangeBegin(); // this function add undo object
-		if (auto obj = LevelEditorLayer::get()->m_undoObjects->lastObject()) {
-			auto rot1 = m_transformControl->m_mainNode->getRotation();
-			addAngleToUndoObject(static_cast<UndoObject*>(obj), rot1);
+	UndoObject* createUndoObject(UndoCommand p0, bool p1) {
+		UndoObject* ret = EditorUI::createUndoObject(p0, p1);
+		if (p0 == UndoCommand::Transform && p1) {
+			auto undo = LevelEditorLayer::get()->m_undoObjects;
+			if (undo && undo->count()) {
+				auto rot1 = m_transformControl->m_mainNode->getRotation();
+				addAngleToUndoObject(static_cast<UndoObject*>(undo->lastObject()), rot1);
+			}
 		}
+		return ret;
 	}
 
 
