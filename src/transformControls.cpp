@@ -292,6 +292,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		m_fields->m_isInFreeRot = true;
 		m_transformButtonType = 12;
 		m_cursorDifference = box.origin + box.size / 2 - nodePoint;
+		EditorUI::get()->createUndoObject(UndoCommand::Transform, false);
 		return true;
 	}
 
