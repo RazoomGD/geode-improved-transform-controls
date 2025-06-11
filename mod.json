@@ -9,7 +9,7 @@
 
 	"id": "razoom.improved_transform_controls",
 	"name": "Improved Transform Controls",
-	"version": "v1.1.0",
+	"version": "v1.1.1",
 	"developer": "RaZooM",
 	"description": "Adds useful options to transform controls",
 	"tags": ["editor", "utility"],
@@ -48,11 +48,11 @@
 				"slider-step": 0.1
 			}
 		},
-		"no-freerot":{
+		"default-grid-snap":{
 			"type": "bool",
 			"default": false,
-			"name": "'FreeRot' always enabled",
-			"description": "This option makes Free Rotation UI element always visible and hides the 'FreeRot' button \n(enable this if you this if you think that 4 buttons is too much for that menu)"
+			"name": "Default grid snap button",
+			"description": "Hide the 'GridSnap' button and use the default 'Snap' button (the one in the bottom right corner of the editor) instead."
 		},
 		"t2": {
 			"type": "title",

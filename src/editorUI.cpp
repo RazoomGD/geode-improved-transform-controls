@@ -6,13 +6,16 @@ class $modify(MyEditorUI, EditorUI) {
 	};
 
 	void addAngleToUndoObject(UndoObject* undo, float angle) {
-		if (angle == 0) return;
 		m_fields->m_transformAnglesForUndoObjects[undo] = angle;
 	}
 
-	float getAngleForUndoObject(UndoObject* undo) {
+	bool getAngleForUndoObject(UndoObject* undo, float *ret) {
 		auto it = m_fields->m_transformAnglesForUndoObjects.find(undo);
-		return it == m_fields->m_transformAnglesForUndoObjects.end() ? 0.f : it->second;
+		if (it == m_fields->m_transformAnglesForUndoObjects.end()) {
+			return false;
+		}
+		*ret = it->second;
+		return true;
 	}
 
 	// $override
@@ -92,7 +95,7 @@ class $modify(MyEditorUI, EditorUI) {
 		// force toggle off rotation mode (fix to RobTop's bugs)
 		if (GameManager::get()->getGameVariable("0007")) {
 			GameManager::get()->setGameVariable("0007", false);
-			static_cast<ButtonSprite*>(m_rotateBtn->getChildByTag(1))->updateBGImage("GJ_button_01.png");
+			static_cast<ButtonSprite*>(m_rotateBtn->getNormalImage())->updateBGImage("GJ_button_01.png");
 			deactivateRotationControl();
 		}
 		EditorUI::activateTransformControl(p0);
@@ -164,13 +167,15 @@ class $modify(MyEditorUI, EditorUI) {
 	void undoLastAction(CCObject* p0) {
 		auto undo = LevelEditorLayer::get()->m_undoObjects;
 		if (m_transformControl->isVisible() && undo && undo->count()) {
-			deactivateTransformControl();
-			float rot = getAngleForUndoObject(static_cast<UndoObject*>(undo->lastObject()));
-			EditorUI::undoLastAction(p0);
-			activateTransformControlWithAngle(rot);
-		} else {
-			EditorUI::undoLastAction(p0);
+			float rot = 0;
+			if (getAngleForUndoObject(static_cast<UndoObject*>(undo->lastObject()), &rot)) {
+				deactivateTransformControl();
+				EditorUI::undoLastAction(p0);
+				activateTransformControlWithAngle(rot);
+				return;
+			}
 		}
+		EditorUI::undoLastAction(p0);
 	}
 
 
@@ -178,14 +183,17 @@ class $modify(MyEditorUI, EditorUI) {
 	void redoLastAction(CCObject* p0) {
 		auto redo = LevelEditorLayer::get()->m_redoObjects;
 		if (m_transformControl->isVisible() && redo && redo->count()) {
-			deactivateTransformControl();
-			float rot = getAngleForUndoObject(static_cast<UndoObject*>(redo->lastObject()));
-			EditorUI::redoLastAction(p0);
-			activateTransformControlWithAngle(rot);
-		} else {
-			EditorUI::redoLastAction(p0);
+			float rot = 0;
+			if (getAngleForUndoObject(static_cast<UndoObject*>(redo->lastObject()), &rot)) {
+				deactivateTransformControl();
+				EditorUI::redoLastAction(p0);
+				activateTransformControlWithAngle(rot);
+				return;
+			}
 		}
+		EditorUI::redoLastAction(p0);
 	}
+
 
 	#ifdef GEODE_IS_MACOS
 	$override
@@ -197,13 +205,15 @@ class $modify(MyEditorUI, EditorUI) {
 
 		auto undo = dispatcher->getShiftKeyPressed() ? m_editorLayer->m_redoObjects : m_editorLayer->m_undoObjects;
 		if (m_transformControl->isVisible() && undo && undo->count()) {
-			deactivateTransformControl();
-			float rot = getAngleForUndoObject(static_cast<UndoObject*>(undo->lastObject()));
-			EditorUI::keyDown(p0);
-			activateTransformControlWithAngle(rot);
-		} else {
-			EditorUI::keyDown(p0);
+			float rot = 0;
+			if(getAngleForUndoObject(static_cast<UndoObject*>(undo->lastObject()), &rot)) {
+				deactivateTransformControl();
+				EditorUI::keyDown(p0);
+				activateTransformControlWithAngle(rot);
+				return;
+			}
 		}
+		EditorUI::keyDown(p0);
 	}
 	#endif
 

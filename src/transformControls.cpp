@@ -34,12 +34,12 @@ struct {
 	ccColor4B m_interfaceCol;
 	InterfaceMode m_showInterface;
 	float m_buttonScale;
-	bool m_freeRotAlways;
+	bool m_defaultGridSnap;
 	void update() {
 		m_interfaceCol = Mod::get()->getSettingValue<cocos2d::ccColor4B>("interface-color");
 		m_showInterface = (InterfaceMode) std::clamp(std::atoi(Mod::get()->getSettingValue<std::string>("show-interface").c_str()), 1, 3);
 		m_buttonScale = Mod::get()->getSettingValue<double>("button-scale");
-		m_freeRotAlways = Mod::get()->getSettingValue<bool>("no-freerot");
+		m_defaultGridSnap = Mod::get()->getSettingValue<bool>("default-grid-snap");
 	}
 } SETTINGS;
 
@@ -68,7 +68,10 @@ struct {
 	}
 
 	bool snap() {return m_snap || CCKeyboardDispatcher::get()->getControlKeyPressed();}
-	bool gridSnap() {return m_gridSnap || CCKeyboardDispatcher::get()->getShiftKeyPressed();}
+	bool gridSnap() {
+		if (CCKeyboardDispatcher::get()->getShiftKeyPressed()) return true;
+		return (SETTINGS.m_defaultGridSnap) ? GameManager::get()->getGameVariable("0008") : m_gridSnap;
+	}
 	bool freeRot() {return m_freeRot || CCKeyboardDispatcher::get()->getControlKeyPressed();}
 
 } STATE;
@@ -180,6 +183,11 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		addLabel(m_fields->m_gridSnapBtn, "GridSnap");
 		addLabel(m_fields->m_freeRotBtn, "FreeRot");
 		addLabel(m_warpLockButton, "ScaleXY");
+
+		// default grid snap
+		if (SETTINGS.m_defaultGridSnap) {
+			m_fields->m_gridSnapBtn->setVisible(false);
+		}
 
 		arrangeMenuButtons();
 
