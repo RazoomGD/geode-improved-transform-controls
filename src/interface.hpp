@@ -27,6 +27,7 @@ public:
 
 	void draw() override {
 		if (m_visibleRect) {
+			glLineWidth(1.f);
 			ccDrawColor4B(m_color);
 			auto tl = m_transformControl->spriteByTag(6);
 			auto br = m_transformControl->spriteByTag(9);

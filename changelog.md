@@ -1,3 +1,10 @@
+# 1.1.2
+- Add rotation snap to 45 degrees
+- Improve old internal implementations
+- Redo is now working with freeRot mode
+- Fix RobTop's rare bug with incorrect transformations in undo-redo 
+- 
+
 # 1.1.1
 - Brought back the old <cy>Snap mode</c>
 - Add modifier keys (Ctrl, Shift)
@@ -9,7 +16,7 @@
 - Added <cg>Grid-snap mode</c>
 
 # 1.0.1
-- fix RobTop's crash with extremely thin objects (thanks, Brittank88)
+- Fix RobTop's crash with extremely thin objects (thanks, Brittank88)
 
 # 1.0.0
-- initial release
+- Initial release

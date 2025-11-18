@@ -1,21 +1,82 @@
-class $modify(MyEditorUI, EditorUI) {
+
+
+class $modify(ITCEditorUI, EditorUI) {
 	struct Fields {
 		float m_initialAngle = 0;
 		bool m_useAngle = false;
-		std::unordered_map<UndoObject*, float> m_transformAnglesForUndoObjects;
+		std::unordered_map<UndoObject*, float> m_anglesForUndoObjects;
 	};
 
 	void addAngleToUndoObject(UndoObject* undo, float angle) {
-		m_fields->m_transformAnglesForUndoObjects[undo] = angle;
+		m_fields->m_anglesForUndoObjects[undo] = angle;
 	}
 
-	bool getAngleForUndoObject(UndoObject* undo, float *ret) {
-		auto it = m_fields->m_transformAnglesForUndoObjects.find(undo);
-		if (it == m_fields->m_transformAnglesForUndoObjects.end()) {
-			return false;
+	std::optional<float> getAngleForUndoObject(UndoObject* undo) {
+		auto f = m_fields.self();
+
+		// clear the dangling pointers (sometimes)
+		int undoRedoAmount = m_editorLayer->m_undoObjects->count() + m_editorLayer->m_redoObjects->count();
+		if (f->m_anglesForUndoObjects.size() > undoRedoAmount + 100) {
+			std::unordered_set<void*> undoRedoArrays;
+			undoRedoArrays.insert(undo);
+			for (int i = 0; i < m_editorLayer->m_undoObjects->count(); i++) {
+				undoRedoArrays.insert(m_editorLayer->m_undoObjects->objectAtIndex(i));
+			}
+			for (int i = 0; i < m_editorLayer->m_redoObjects->count(); i++) {
+				undoRedoArrays.insert(m_editorLayer->m_redoObjects->objectAtIndex(i));
+			}
+			for (auto it = f->m_anglesForUndoObjects.begin(); it != f->m_anglesForUndoObjects.end(); ) {
+				if (!undoRedoArrays.contains(it->first)) {
+					it = f->m_anglesForUndoObjects.erase(it); // dangling ptr
+				} else it++;
+			}
+		} // todo: maybe test it
+
+		auto it = f->m_anglesForUndoObjects.find(undo);
+		if (it == f->m_anglesForUndoObjects.end()) {
+			return std::nullopt;
 		}
-		*ret = it->second;
-		return true;
+		return it->second;
+	}
+
+
+	UndoObject* createTransfromNoScaleUndoObject(bool addToUndoList = true) {
+		
+		auto objects = getSelectedObjects();
+		auto objectCopies = CCArray::create();
+		for (int i = 0; i < objects->count(); i++) {
+			auto obj = static_cast<GameObject*>(objects->objectAtIndex(i));
+			auto objCopy = GameObjectCopy::create(obj);
+			objectCopies->addObject(objCopy);
+		}
+
+		UndoObject* undo = new UndoObject();
+		undo->autorelease();
+
+		undo->m_redo = false;
+		undo->m_objects = nullptr;
+		undo->m_objectCopy = nullptr;
+		undo->m_undoTransform = false;
+		undo->m_command = UndoCommand::Transform;
+
+		if (objectCopies->count() == 1) {
+			undo->m_objectCopy = static_cast<GameObjectCopy*>(objectCopies->firstObject());
+			undo->m_objectCopy->retain();
+		} else {
+			undo->m_objects = objectCopies;
+			undo->m_objects->retain();
+		}
+
+		if (addToUndoList) {
+			m_editorLayer->m_redoObjects->removeAllObjects();
+			int maxUndo = m_editorLayer->m_increaseMaxUndoRedo ? 1000 : 200;
+			if (m_editorLayer->m_undoObjects->count() >= maxUndo) {
+				m_editorLayer->m_undoObjects->removeObjectAtIndex(0);
+			}
+			m_editorLayer->m_undoObjects->addObject(undo);
+		}
+
+		return undo;
 	}
 
 	// $override
@@ -26,7 +87,7 @@ class $modify(MyEditorUI, EditorUI) {
 
 	// void onBtn1(CCObject*) {
 	// 	log::debug("last undo obj--------------------------------");
-	// 	auto obj = static_cast<UndoObject*>(LevelEditorLayer::get()->m_undoObjects->lastObject());
+	// 	auto obj = static_cast<UndoObject*>(m_editorLayer->m_undoObjects->lastObject());
 	// 	if (obj->m_command == UndoCommand::Transform) {
 	// 		auto t = obj->m_transformState;
 	// 		log::debug("objects.count()={}; undoTransform={}", obj->m_objects->count(), obj->m_undoTransform);
@@ -80,7 +141,7 @@ class $modify(MyEditorUI, EditorUI) {
 
 
 	void activateTransformControlWithAngle(float angle) {
-		// log::debug("activate w angle {}", angle);
+		log::debug("activate w angle {}", angle);
 		m_fields->m_initialAngle = angle;
 		m_fields->m_useAngle = true;
 		EditorUI::deactivateRotationControl();
@@ -134,7 +195,7 @@ class $modify(MyEditorUI, EditorUI) {
 	// $override
 	// void transformChangeBegin() {
 	// 	EditorUI::transformChangeBegin(); // this function add undo object
-	// 	auto undo = LevelEditorLayer::get()->m_undoObjects;
+	// 	auto undo = m_editorLayer->m_undoObjects;
 	// 	if (undo && undo->count()) {
 	// 		auto rot1 = m_transformControl->m_mainNode->getRotation();
 	// 		addAngleToUndoObject(static_cast<UndoObject*>(undo->lastObject()), rot1);
@@ -143,14 +204,11 @@ class $modify(MyEditorUI, EditorUI) {
 
 
 	$override
-	UndoObject* createUndoObject(UndoCommand p0, bool p1) {
+	UndoObject* createUndoObject(UndoCommand p0, bool p1) { // p1 - don't add to undo list
 		UndoObject* ret = EditorUI::createUndoObject(p0, p1);
-		if (p0 == UndoCommand::Transform && p1) {
-			auto undo = LevelEditorLayer::get()->m_undoObjects;
-			if (undo && undo->count()) {
-				auto rot1 = m_transformControl->m_mainNode->getRotation();
-				addAngleToUndoObject(static_cast<UndoObject*>(undo->lastObject()), rot1);
-			}
+		if (ret && ret->m_command == UndoCommand::Transform && ret->m_undoTransform) {
+			addAngleToUndoObject(ret, m_transformControl->m_mainNode->getRotation());
+			log::info("angle added");
 		}
 		return ret;
 	}
@@ -162,40 +220,91 @@ class $modify(MyEditorUI, EditorUI) {
 	// }
 
 
+	// util: return true on success
+	void universalUndoRedoHook(bool isUndo, std::function<void()> original) {
+		CCArray* from = isUndo ? m_editorLayer->m_undoObjects : m_editorLayer->m_redoObjects;
+		CCArray* to = isUndo ? m_editorLayer->m_redoObjects : m_editorLayer->m_undoObjects;
+		bool originalWasCalled = false;
+
+		// do we have something to undo?
+		if (auto undoObj = static_cast<UndoObject*>(from->lastObject())) {
+
+			// is that buggy transform command?
+			if (undoObj->m_command == UndoCommand::Transform && undoObj->m_undoTransform) {
+				
+				// remember current redo head to check if it will be changed
+				auto oldLastRedo = static_cast<UndoObject*>(to->lastObject());
+
+				std::optional<float> setFreeRotValue;
+
+				// is this my FreeRot undo action?
+				if (auto maybeRot = getAngleForUndoObject(undoObj)) {
+
+					float currentRot = m_transformControl->m_mainNode->getRotation();
+					float targetRot = *maybeRot;
+
+					if (m_transformControl->isVisible() && currentRot != targetRot) {
+						deactivateTransformControl();
+						original();
+						originalWasCalled = true;
+						activateTransformControlWithAngle(*maybeRot);
+
+						// undo obj had the angle, so the next redo obj also must have it
+						setFreeRotValue = currentRot;
+					}
+				} 
+
+				if (!originalWasCalled) {
+					original();
+					originalWasCalled = true;
+				}
+
+				// now fix newly created redo object
+	
+				auto newLastRedo = static_cast<UndoObject*>(to->lastObject());
+
+				if (newLastRedo && newLastRedo != oldLastRedo) {
+					// RobTop's bug thai it sometimes is not set
+					newLastRedo->m_undoTransform = true;
+					newLastRedo->m_command = UndoCommand::Transform;
+
+					// set FreeRot value if it was FreeRot mode
+					if (setFreeRotValue) {
+						addAngleToUndoObject(newLastRedo, *setFreeRotValue);
+					}
+				}
+			}
+		}
+		
+		if (!originalWasCalled) {
+			original();
+		}
+	}
+
+
 	// prevent undo/redo bugs
 	$override
 	void undoLastAction(CCObject* p0) {
-		auto undo = LevelEditorLayer::get()->m_undoObjects;
-		if (m_transformControl->isVisible() && undo && undo->count()) {
-			float rot = 0;
-			if (getAngleForUndoObject(static_cast<UndoObject*>(undo->lastObject()), &rot)) {
-				deactivateTransformControl();
-				EditorUI::undoLastAction(p0);
-				activateTransformControlWithAngle(rot);
-				return;
-			}
-		}
-		EditorUI::undoLastAction(p0);
+		universalUndoRedoHook(true, [this, p0] {
+			EditorUI::undoLastAction(p0);
+		});
+		// log::info("undo {} {}", m_editorLayer->m_undoObjects, m_editorLayer->m_redoObjects);
+			
 	}
 
 
 	$override
 	void redoLastAction(CCObject* p0) {
-		auto redo = LevelEditorLayer::get()->m_redoObjects;
-		if (m_transformControl->isVisible() && redo && redo->count()) {
-			float rot = 0;
-			if (getAngleForUndoObject(static_cast<UndoObject*>(redo->lastObject()), &rot)) {
-				deactivateTransformControl();
-				EditorUI::redoLastAction(p0);
-				activateTransformControlWithAngle(rot);
-				return;
-			}
-		}
-		EditorUI::redoLastAction(p0);
+		universalUndoRedoHook(false, [this, p0] {
+			EditorUI::redoLastAction(p0);
+		});
+		// log::info("redo {} {}", m_editorLayer->m_undoObjects, m_editorLayer->m_redoObjects);
+
 	}
 
 
 	#ifdef GEODE_IS_MACOS
+
 	$override
 	void keyDown(enumKeyCodes p0) {
 		auto dispatcher = CCKeyboardDispatcher::get();
@@ -203,18 +312,12 @@ class $modify(MyEditorUI, EditorUI) {
 			return EditorUI::keyDown(p0);
 		}
 
-		auto undo = dispatcher->getShiftKeyPressed() ? m_editorLayer->m_redoObjects : m_editorLayer->m_undoObjects;
-		if (m_transformControl->isVisible() && undo && undo->count()) {
-			float rot = 0;
-			if(getAngleForUndoObject(static_cast<UndoObject*>(undo->lastObject()), &rot)) {
-				deactivateTransformControl();
-				EditorUI::keyDown(p0);
-				activateTransformControlWithAngle(rot);
-				return;
-			}
-		}
-		EditorUI::keyDown(p0);
+		bool isUndo = !dispatcher->getShiftKeyPressed();
+		universalUndoRedoHook(isUndo, [this, p0] {
+			EditorUI::keyDown(p0);
+		});
 	}
+
 	#endif
 
 };

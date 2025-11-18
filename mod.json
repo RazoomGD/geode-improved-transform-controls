@@ -1,5 +1,5 @@
 {
-	"geode": "4.5.0",
+	"geode": "4.9.0",
 	"gd": {
 		"win": "2.2074",
 		"android": "2.2074",
@@ -9,7 +9,7 @@
 
 	"id": "razoom.improved_transform_controls",
 	"name": "Improved Transform Controls",
-	"version": "v1.1.1",
+	"version": "v1.1.2",
 	"developer": "RaZooM",
 	"description": "Adds useful options to transform controls",
 	"tags": ["editor", "utility"],
