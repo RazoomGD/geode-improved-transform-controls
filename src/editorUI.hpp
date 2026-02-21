@@ -312,7 +312,7 @@ class $modify(ITCEditorUI, EditorUI) {
 		}
 
 		bool isUndo = !dispatcher->getShiftKeyPressed();
-		universalUndoRedoHook(isUndo, [this, p0] {
+		universalUndoRedoHook(isUndo, [this, p0, timestamp] {
 			EditorUI::keyDown(p0, timestamp);
 		});
 	}

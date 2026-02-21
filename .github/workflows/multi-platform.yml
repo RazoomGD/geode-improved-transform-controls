@@ -43,6 +43,7 @@ jobs:
           target: ${{ matrix.config.target }}
           sdk: nightly
           cli: nightly
+          bindings: RazoomGD/bindings-fork
 
   package:
     name: Package builds
