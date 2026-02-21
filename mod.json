@@ -75,7 +75,7 @@
 			"type": "bool",
 			"default": true,
 			"name": "Show extra UI elements",
-			"description": "Show new UI elements (added in Improved Transform Controls v1.2.0)"
+			"description": "Show new UI elements in addition to the transform rectangle"
 		},
 		"interface-color": {
 			"type": "rgba",
