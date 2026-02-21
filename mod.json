@@ -1,17 +1,17 @@
 {
-	"geode": "4.9.0",
+	"geode": "5.0.0-beta.3",
 	"gd": {
-		"win": "2.2074",
-		"android": "2.2074",
-		"mac": "2.2074",
-		"ios": "2.2074"
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
 	},
 
 	"id": "razoom.improved_transform_controls",
 	"name": "Improved Transform Controls",
-	"version": "v1.1.2",
+	"version": "v1.2.0",
 	"developer": "RaZooM",
-	"description": "Adds useful options to transform controls",
+	"description": "Enhances default transform (warp) controls",
 	"tags": ["editor", "utility"],
 
 	"links": {
@@ -54,6 +54,12 @@
 			"name": "Default grid snap button",
 			"description": "Hide the 'GridSnap' button and use the default 'Snap' button (the one in the bottom right corner of the editor) instead."
 		},
+		"anchor-snap-center": {
+			"type": "bool",
+			"default": true,
+			"name": "Snap anchor to the middle",
+			"description": "Snap the transform <co>anchor</c> not only to the lines of the grid but also to the centers of the grid cells"
+		},
 		"t2": {
 			"type": "title",
 			"name": "Interface"
@@ -65,10 +71,21 @@
 			"default": "3: on change",
 			"one-of": ["1: never", "2: always", "3: on change"]
 		},
+		"show-extra-ui-elements": {
+			"type": "bool",
+			"default": true,
+			"name": "Show extra UI elements",
+			"description": "Show new UI elements (added in Improved Transform Controls v1.2.0)"
+		},
 		"interface-color": {
 			"type": "rgba",
 			"name": "Transform rectangle color",
 			"default": [255, 255, 0, 255]
+		},
+		"interface-color-extra": {
+			"type": "rgba",
+			"name": "Extra UI elements color",
+			"default": [0, 200, 255, 255]
 		}
 	}
 }

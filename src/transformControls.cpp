@@ -1,4 +1,5 @@
 #include <cmath>
+// #include <cstddef>
 #include <Geode/Geode.hpp>
 #include <Geode/modify/GJTransformControl.hpp>
 #include <Geode/modify/EditorUI.hpp>
@@ -15,6 +16,8 @@ using namespace geode::prelude;
 
 #define MAX_FP_ERROR 0.01f
 
+#define BUTTON_LABEL_TAG 2026
+
 #define SNAP_ON_SPR "snapOnBtn_001.png"_spr
 #define SNAP_OFF_SPR "snapOffBtn_001.png"_spr
 #define ANCHOR_ON_SPR "anchorOnBtn_001.png"_spr
@@ -23,8 +26,6 @@ using namespace geode::prelude;
 #define FREEROT_OFF_SPR "freeRotOffBtn_001.png"_spr
 #define GRID_SNAP_ON_SPR "gridSnapOnBtn_001.png"_spr
 #define GRID_SNAP_OFF_SPR "gridSnapOffBtn_001.png"_spr
-#define LOCK_SCALE_ON_SPR "gridSnapOnBtn_001.png"_spr // todo
-#define LOCK_SCALE_OFF_SPR "gridSnapOffBtn_001.png"_spr
 
 
 enum class InterfaceMode {
@@ -34,14 +35,20 @@ enum class InterfaceMode {
 
 struct {
 	ccColor4B m_interfaceCol;
+	ccColor4B m_interfaceColExtra;
 	InterfaceMode m_showInterface;
+	bool m_extraInterfaceElements;
+	bool m_snapAnchorToCenter;
 	float m_buttonScale;
 	bool m_defaultGridSnap;
 	void update() {
 		m_interfaceCol = Mod::get()->getSettingValue<cocos2d::ccColor4B>("interface-color");
+		m_interfaceColExtra = Mod::get()->getSettingValue<cocos2d::ccColor4B>("interface-color-extra");
 		m_showInterface = (InterfaceMode) std::clamp(std::atoi(Mod::get()->getSettingValue<std::string>("show-interface").c_str()), 1, 3);
 		m_buttonScale = Mod::get()->getSettingValue<double>("button-scale");
 		m_defaultGridSnap = Mod::get()->getSettingValue<bool>("default-grid-snap");
+		m_extraInterfaceElements = Mod::get()->getSettingValue<bool>("show-extra-ui-elements");
+		m_snapAnchorToCenter = Mod::get()->getSettingValue<bool>("anchor-snap-center");
 	}
 } SETTINGS;
 
@@ -52,7 +59,6 @@ struct {
 	bool m_snap;         // also Ctrl + spr1
 	bool m_gridSnap;     // also Shift + spr 1-9,12
 	bool m_freeRot;      // also Ctrl + spr 12
-	bool m_dontScale;
 
 	void save() {
 		Mod::get()->setSavedValue("lock-xy", m_lockXY);
@@ -60,7 +66,6 @@ struct {
 		Mod::get()->setSavedValue("snap", m_snap);
 		Mod::get()->setSavedValue("grid-snap", m_gridSnap);
 		Mod::get()->setSavedValue("free-rot", m_freeRot);
-		Mod::get()->setSavedValue("lock-scale", m_dontScale);
 	}
 
 	void load() {
@@ -69,7 +74,6 @@ struct {
 		m_snap = Mod::get()->getSavedValue<bool>("snap", false);
 		m_gridSnap = Mod::get()->getSavedValue<bool>("grid-snap", false);
 		m_freeRot = Mod::get()->getSavedValue<bool>("free-rot", false);
-		m_dontScale = Mod::get()->getSavedValue<bool>("lock-scale", false);
 	}
 
 	bool snap() {return m_snap || CCKeyboardDispatcher::get()->getControlKeyPressed();}
@@ -110,12 +114,10 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		CCMenuItemSpriteExtra* m_snapBtn;
 		CCMenuItemSpriteExtra* m_anchorBtn;
 		CCMenuItemSpriteExtra* m_freeRotBtn;
-		CCMenuItemSpriteExtra* m_dontScaleBtn;
 
 		uint16_t m_blockedSprites = 0; // bit array
 
 		bool m_isInFreeRot = false;
-		bool m_isInLockScale = false;
 		
 		GJTransformControlInterface* m_interface;
 
@@ -128,6 +130,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		auto label = CCLabelBMFont::create(txt, "bigFont.fnt");
 		button->addChildAtPosition(label, Anchor::Bottom);
 		label->setScale(.2f);
+		label->setTag(BUTTON_LABEL_TAG);
+		updateLabelOpacity(button, false);
 	}
 
 
@@ -138,13 +142,14 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		if (STATE.m_snap) {STATE.m_snap = false; onSnapBtn(nullptr);}
 		if (STATE.m_gridSnap) {STATE.m_gridSnap = false; onSnapGridBtn(nullptr);}
 		if (STATE.m_freeRot) {STATE.m_freeRot = false; onFreeRotBtn(nullptr);}
-		if (STATE.m_dontScale) {STATE.m_dontScale = false; onLockScaleBtn(nullptr);}
 	}
 
 
 	// util: arrange buttons in the menu
 	inline void arrangeMenuButtons() {
+		// todo: change it somehow esecially when the defual snap is used
 		float x = -60;
+		// float x = -90;
 		float y = 20;
 		for (auto* ch : CCArrayExt<CCNode*>(m_fields->m_menu->getChildren())) {
 			if (ch->isVisible()) {
@@ -183,16 +188,11 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 			CCSprite::createWithSpriteFrameName(FREEROT_OFF_SPR), 
 			this, menu_selector(MyGJTransformControl::onFreeRotBtn)
 		);
-		f->m_dontScaleBtn = CCMenuItemSpriteExtra::create(
-			CCSprite::createWithSpriteFrameName(LOCK_SCALE_OFF_SPR), 
-			this, menu_selector(MyGJTransformControl::onLockScaleBtn)
-		);
 		
 		f->m_menu->addChild(f->m_anchorBtn);
 		f->m_menu->addChild(f->m_snapBtn);
 		f->m_menu->addChild(f->m_gridSnapBtn);
 		f->m_menu->addChild(f->m_freeRotBtn);
-		f->m_menu->addChild(f->m_dontScaleBtn);
 		
 		// add labels to the buttons
 		addLabel(f->m_anchorBtn, "Anchor");
@@ -200,7 +200,6 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		addLabel(f->m_gridSnapBtn, "GridSnap");
 		addLabel(f->m_freeRotBtn, "FreeRot");
 		addLabel(m_warpLockButton, "ScaleXY");
-		addLabel(f->m_dontScaleBtn, "OnlyPos");
 
 		// default grid snap
 		if (SETTINGS.m_defaultGridSnap) {
@@ -210,7 +209,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		arrangeMenuButtons();
 
 		// add interface node
-		f->m_interface = GJTransformControlInterface::create(this, SETTINGS.m_interfaceCol);
+		f->m_interface = GJTransformControlInterface::create(this, SETTINGS.m_interfaceCol, SETTINGS.m_interfaceColExtra);
 		m_mainNode->addChild(f->m_interface);
 		f->m_interface->setInterfaceVisibility(SETTINGS.m_showInterface == InterfaceMode::Visible);
 
@@ -268,6 +267,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 	}
 
 
+	// move anchor to the postion in editor coords
 	void moveAnchorToPos(CCPoint positionInLevelCoords) {
 		auto editor = EditorUI::get();
 		auto level = LevelEditorLayer::get();
@@ -283,11 +283,11 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 
 	// move anchor to the sprite pos
-	void moveAnchorToSprite(int sprIdx, bool colorSprite = true) {
+	void moveAnchorToSprite(int sprIdx, CCPoint offset = {0,0}, bool colorSprite = true) {
 		auto spr = spriteByTag(sprIdx);
 		auto worldPoint = spr->convertToWorldSpace(spr->getContentSize() / 2);
 		auto levelPoint = LevelEditorLayer::get()->m_objectLayer->convertToNodeSpace(worldPoint);
-		moveAnchorToPos(levelPoint);
+		moveAnchorToPos(levelPoint + offset);
 		if (colorSprite) {
 			spr->setColor(ANCHOR_COL);
 		}
@@ -295,14 +295,14 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 
 	// move anchor to the pose in between two sprites
-	void moveAnchorToSprite(int sprIdx1, int sprIdx2, bool colorSprites = true) {
+	void moveAnchorToSprite(int sprIdx1, int sprIdx2, CCPoint offset = {0,0}, bool colorSprites = true) {
 		auto spr1 = spriteByTag(sprIdx1);
 		auto spr2 = spriteByTag(sprIdx2);
 		auto worldPoint1 = spr1->convertToWorldSpace(spr1->getContentSize() / 2);
 		auto worldPoint2 = spr2->convertToWorldSpace(spr2->getContentSize() / 2);
 		auto middle = (worldPoint1 + worldPoint2) * 0.5;
 		auto levelPoint = LevelEditorLayer::get()->m_objectLayer->convertToNodeSpace(middle);
-		moveAnchorToPos(levelPoint);
+		moveAnchorToPos(levelPoint + offset);
 		if (colorSprites) {
 			spr1->setColor(ANCHOR_COL);
 			spr2->setColor(ANCHOR_COL);
@@ -325,64 +325,13 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 	}
 
 
-	// Try to begin no-scale transform. On success set m_transformButtonType, m_cursorDifference,
-	// m_fields->m_isInLockScale, return true
-	bool tryToBeginNoScale(CCTouch* touch, CCEvent* event) {
-		auto mainNodePoint = m_mainNode->convertToNodeSpace(touch->getLocation());
-		if (!spriteByTag(1)->boundingBox().containsPoint(mainNodePoint)) {
-			for (int i = 2; i < 10; i++) { // early check if this sprite blocked
-				auto box = spriteByTag(i)->boundingBox();
-				if (box.containsPoint(mainNodePoint)) { // found
-					m_transformButtonType = i;
-					m_fields->m_isInLockScale = true;
-					m_cursorDifference = box.origin + box.size / 2 - mainNodePoint;
-					// todo: undo obj
-
-					// create and setup undo object
-					// auto objects = EditorUI::get()->getSelectedObjects();
-					// auto objectCopies = CCArray::create();
-					// for (int i = 0; i < objects->count(); i++) {
-					// 	auto obj = static_cast<GameObject*>(objects->objectAtIndex(i));
-					// 	auto objCopy = GameObjectCopy::create(obj);
-					// 	objectCopies->addObject(objCopy);
-					// }
-					// auto undo = new UndoObject();
-					// undo->m_redo = false;
-					// undo->m_objects = nullptr;
-					// undo->m_objectCopy = nullptr;
-					// undo->m_undoTransform = false;
-					// undo->m_command = UndoCommand::Transform;
-					// if (objectCopies->count() == 1) {
-					// 	undo->m_objectCopy = static_cast<GameObjectCopy*>(objectCopies->firstObject());
-					// 	undo->m_objectCopy->retain();
-					// } else {
-					// 	undo->m_objects = objectCopies;
-					// 	undo->m_objects->retain();
-					// }
-					// undo->autorelease();
-
-					// add undo object to list
-					// auto lel = LevelEditorLayer::get();
-					// lel->m_redoObjects->removeAllObjects();
-					// int maxUndo = lel->m_increaseMaxUndoRedo ? 1000 : 200;
-					// if (lel->m_undoObjects->count() >= maxUndo) {
-					// 	lel->m_undoObjects->removeObjectAtIndex(0);
-					// 	lel->m_undoObjects->addObject(undo);
-					// }
-					
-					log::info("NO sclae start"); // todo: rm
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
-
 	// util to not repeat code in ccTouchBegan
-	inline bool touchBeginSuccess() {
+	bool touchBeginSuccess() {
 		if (SETTINGS.m_showInterface == InterfaceMode::OnChange) {
 			m_fields->m_interface->setInterfaceVisibility(true);
+		}
+		if (SETTINGS.m_extraInterfaceElements) {
+			m_fields->m_interface->setExtraUIElementsForActiveSprite(m_transformButtonType);
 		}
 		return true;
 	}
@@ -392,7 +341,6 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 	bool ccTouchBegan(CCTouch* p0, CCEvent* p1) {
 
 		m_fields->m_isInFreeRot = false;
-		m_fields->m_isInLockScale = false;
 
 		// find touched button (return if it is locked)
 		auto mainNodePoint = m_mainNode->convertToNodeSpace(p0->getLocation());
@@ -408,7 +356,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		auto editor = EditorUI::get();
 
 		// fix no objects crash
-		if (editor->getSelectedObjects()->count() == 0) {
+		if (!editor->getSelectedObjects()->count() || !m_objects || !m_objects->count()) {
 			editor->deactivateTransformControl();
 			return false;
 		}
@@ -416,9 +364,6 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		// when anchor enabled
 		if (STATE.m_enableAnchor) {
 			if (STATE.freeRot() && tryToBeginFreeRot(p0, p1)) { // try to begin freeRot
-				return touchBeginSuccess();
-			} 
-			if (STATE.m_dontScale && tryToBeginNoScale(p0, p1)) { // try to begin no-scale transform
 				return touchBeginSuccess();
 			}
 			return GJTransformControl::ccTouchBegan(p0, p1) ? touchBeginSuccess() : false;
@@ -435,19 +380,22 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		if (STATE.freeRot()) { // try to begin freeRot
 			touchAccepted = tryToBeginFreeRot(p0, p1);
 		}
-		if (!touchAccepted && STATE.m_dontScale) { // try to begin no-scale transform
-			touchAccepted = tryToBeginNoScale(p0, p1);
-		}
 		if (!touchAccepted) { // can't begin free rot, try to begin classic transform
 			touchAccepted = GJTransformControl::ccTouchBegan(p0, p1);
 		}
 
 		anchor->setPosition(anchorOldPos); // bring anchor back
 
-		if (!touchAccepted) return false; // nothing worked
+		if (!touchAccepted) return false; // nothing worked, return
 
-		if (CCKeyboardDispatcher::get()->getControlKeyPressed()) {
+		// move anchor to the right place
+
+		if (m_transformButtonType == 12) { // rotation
+			moveAnchorToPos(editor->getGroupCenter(m_objects, true));
+			
+		} else if (CCKeyboardDispatcher::get()->getControlKeyPressed()) {
 			switch (m_transformButtonType) {
+				// todo: in fact they all move anchor to the same point (although color different sprites)
 				case 2:
 				case 3: moveAnchorToSprite(4, 5); break;
 				case 4:
@@ -456,28 +404,14 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 				case 9: moveAnchorToSprite(7, 8); break;
 				case 7:
 				case 8: moveAnchorToSprite(6, 9); break;
-				// case 10: moveAnchorToSprite(5); break; <--- broken
-				// case 11: moveAnchorToSprite(2); break;
-				case 12: moveAnchorToPos(editor->getGroupCenter(m_objects, true)); break;
 				default: break;
 			}
 		} else {
-			switch (m_transformButtonType) {
-				case 2: moveAnchorToSprite(3); break;
-				case 3: moveAnchorToSprite(2); break;
-				case 4: moveAnchorToSprite(5); break;
-				case 5: moveAnchorToSprite(4); break;
-				case 6: moveAnchorToSprite(9); break;
-				case 7: moveAnchorToSprite(8); break;
-				case 8: moveAnchorToSprite(7); break;
-				case 9: moveAnchorToSprite(6); break;
-				// case 10: moveAnchorToSprite(5); break; <--- broken
-				// case 11: moveAnchorToSprite(2); break;
-				case 12: moveAnchorToPos(editor->getGroupCenter(m_objects, true)); break;
-				default: break;
+			int8_t oppositeSpr[13] = {0, 0, 3, 2, 5, 4, 9, 8, 7, 6, 0, 0, 0};
+			if (int pivotSpr = oppositeSpr[m_transformButtonType]) {
+				moveAnchorToSprite(pivotSpr);
 			}
 		}
-
 		return touchBeginSuccess();
 	}
 
@@ -508,6 +442,17 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		float dy = yLine - nodeExpectedEditorPos.y;
 		bool snapX = fabsf(dx) < gridSz * 0.2;
 		bool snapY = fabsf(dy) < gridSz * 0.2;
+		
+		// try to snap anchor to the cell center
+		if (SETTINGS.m_snapAnchorToCenter && m_transformButtonType == 1 && !snapX && !snapY) {
+			xLine = (roundf(nodeExpectedEditorPos.x / gridSz + 0.5f) - 0.5f) * gridSz;
+			yLine = (roundf(nodeExpectedEditorPos.y / gridSz + 0.5f) - 0.5f) * gridSz;
+
+			snapX = fabsf(xLine - nodeExpectedEditorPos.x) < gridSz * 0.2;
+			snapY = fabsf(yLine - nodeExpectedEditorPos.y) < gridSz * 0.2;
+
+			snapX = snapY = (snapX && snapY); // both or none
+		}
 
 		if (snapX || snapY) {
 			// reverse conversion
@@ -578,7 +523,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 			if (STATE.gridSnap()) { // rotSnap + freeRot
 				float targetRot = roundf(newRot / 45) * 45;
-				if (fabsf(targetRot - newRot) < 3) {
+				if (fabsf(targetRot - newRot) < 4) {
 					newRot = targetRot;
 					spriteByTag(12)->setColor(SNAP_COL);
 				} else {
@@ -588,13 +533,6 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 			m_mainNode->setRotation(newRot);
             GJTransformControl::updateButtons(false, false);
-			return;
-		}
-
-		// only change object positions
-		if (m_fields->m_isInLockScale) {
-
-			// todo: 
 			return;
 		}
 		
@@ -607,7 +545,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 			float newRot = -fVar15 * 180 / M_PI - m_rotation;
 
 			float targetRot = roundf(newRot / 45) * 45;
-			if (fabsf(targetRot - newRot) < 3) {
+			if (fabsf(targetRot - newRot) < 4) {
 				newRot = targetRot;
 				// if (newRot != m_rotationY) {
 				if (true) {
@@ -619,14 +557,15 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 				}
 			}
 			spriteByTag(12)->setColor(rotationSnapped ? SNAP_COL : WHITE_COL);
-			if (!rotationSnapped) {
-				GJTransformControl::ccTouchMoved(p0, p1);
+
+			if (rotationSnapped) {
+				return;
 			}
-			return;
 		}
 		
 		return GJTransformControl::ccTouchMoved(p0, p1);
 	}
+
 
 	$override 
 	void ccTouchEnded(CCTouch* p0, CCEvent* p1) {
@@ -638,20 +577,17 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 			auto rot = m_mainNode->getRotation();
 			editor->deactivateTransformControl();
 			editor->activateTransformControlWithAngle(rot);
-		} else if (m_fields->m_isInLockScale) {
-			// todo: my code
-			
 		} else {
 			GJTransformControl::ccTouchEnded(p0, p1);
 		}
 
 		m_fields->m_isInFreeRot = false;
-		m_fields->m_isInLockScale = false;
 		m_transformButtonType = 0;
-		
+	
 		if (SETTINGS.m_showInterface == InterfaceMode::OnChange) {
 			m_fields->m_interface->setInterfaceVisibility(false);
 		}
+		m_fields->m_interface->setExtraUIElementsForActiveSprite(0);
 	}
 
 
@@ -741,7 +677,6 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		f->m_freeRotBtn->setRotation(-angle);
 		m_warpLockButton->setRotation(-angle);
 		f->m_gridSnapBtn->setRotation(-angle);
-		f->m_dontScaleBtn->setRotation(-angle);
 
 		if (m_transformButtonType == 0) { // not in touch move
 			updateBlockedSprites();
@@ -757,11 +692,18 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 	// ----------------------- ALL BUTTON HANDLERS -----------------------
 
+	void updateLabelOpacity(CCNode* btn, bool isOn) {
+		if (auto l = btn->getChildByTag(BUTTON_LABEL_TAG)) {
+			static_cast<CCLabelBMFont*>(l)->setOpacity(isOn ? 255 : 110);
+		}
+	}
+
 
 	$override
 	void onToggleLockScale(CCObject* sender) {
 		GJTransformControl::onToggleLockScale(sender);
 		STATE.m_lockXY = m_warpLocked;
+		updateLabelOpacity(m_warpLockButton, m_warpLocked);
 	}
 
 
@@ -769,12 +711,14 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		auto anchor = spriteByTag(1);
 		auto editor = EditorUI::get();
 
-		if (STATE.m_enableAnchor = !STATE.m_enableAnchor) {
+		STATE.m_enableAnchor = !STATE.m_enableAnchor;
+		if (STATE.m_enableAnchor) {
 			anchor->setVisible(true);
 			m_fields->m_anchorBtn->setSprite(CCSprite::createWithSpriteFrameName(ANCHOR_ON_SPR));
-
+			updateLabelOpacity(m_fields->m_anchorBtn, STATE.m_enableAnchor);		
+			
 			// fix no objects crash
-			if (editor->getSelectedObjects()->count() == 0) {
+			if (!editor->getSelectedObjects()->count() || !m_objects || !m_objects->count()) {
 				editor->deactivateTransformControl();
 				return;
 			}
@@ -788,6 +732,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		} else {
 			anchor->setVisible(false);
 			m_fields->m_anchorBtn->setSprite(CCSprite::createWithSpriteFrameName(ANCHOR_OFF_SPR));
+			updateLabelOpacity(m_fields->m_anchorBtn, STATE.m_enableAnchor);		
 		}
 
 		updateBlockedSprites();
@@ -795,38 +740,36 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 
 	void onSnapBtn(CCObject*) {
-		if (STATE.m_snap = !STATE.m_snap) {
+		STATE.m_snap = !STATE.m_snap;
+		if (STATE.m_snap) {
 			m_fields->m_snapBtn->setSprite(CCSprite::createWithSpriteFrameName(SNAP_ON_SPR));
 		} else {
 			m_fields->m_snapBtn->setSprite(CCSprite::createWithSpriteFrameName(SNAP_OFF_SPR));
 		}
+		updateLabelOpacity(m_fields->m_snapBtn, STATE.m_snap);		
 	}
 
 
 	void onSnapGridBtn(CCObject*) {
-		if (STATE.m_gridSnap = !STATE.m_gridSnap) {
+		STATE.m_gridSnap = !STATE.m_gridSnap;
+		if (STATE.m_gridSnap) {
 			m_fields->m_gridSnapBtn->setSprite(CCSprite::createWithSpriteFrameName(GRID_SNAP_ON_SPR));
 		} else {
 			m_fields->m_gridSnapBtn->setSprite(CCSprite::createWithSpriteFrameName(GRID_SNAP_OFF_SPR));
 		}
+		updateLabelOpacity(m_fields->m_gridSnapBtn, STATE.m_gridSnap);		
 	}
 
 
 	void onFreeRotBtn(CCObject*) {
-		if (STATE.m_freeRot = !STATE.m_freeRot) {
+		STATE.m_freeRot = !STATE.m_freeRot;
+		if (STATE.m_freeRot) {
 			m_fields->m_freeRotBtn->setSprite(CCSprite::createWithSpriteFrameName(FREEROT_ON_SPR));
 		} else {
 			m_fields->m_freeRotBtn->setSprite(CCSprite::createWithSpriteFrameName(FREEROT_OFF_SPR));
 		}
+		updateLabelOpacity(m_fields->m_freeRotBtn, STATE.m_freeRot);		
 	}
 
-
-	void onLockScaleBtn(CCObject*) {
-		if (STATE.m_dontScale = !STATE.m_dontScale) {
-			m_fields->m_dontScaleBtn->setSprite(CCSprite::createWithSpriteFrameName(LOCK_SCALE_ON_SPR));
-		} else {
-			m_fields->m_dontScaleBtn->setSprite(CCSprite::createWithSpriteFrameName(LOCK_SCALE_OFF_SPR));
-		}
-	}
 };
 

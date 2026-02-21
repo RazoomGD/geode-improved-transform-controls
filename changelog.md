@@ -1,9 +1,14 @@
-# 1.1.2
-- Add rotation snap to 45 degrees
-- Improve old internal implementations
-- Redo is now working with freeRot mode
-- Fix RobTop's rare bug with incorrect transformations in undo-redo 
-- 
+# 1.2.0
+- Port to GD 2.2081
+- Additions:
+  - Add rotation snap to 45 degrees
+  - Add extra UI elements
+  - Allow snap anchor to the centers of the grid cells
+- Fixes:
+  - Redo is now working fine with freeRot mode
+  - Fix RobTop's rare bug with incorrect transformations in undo-redo 
+  - Labels now change opacity together with the buttons
+  - Improve some old internal implementations
 
 # 1.1.1
 - Brought back the old <cy>Snap mode</c>

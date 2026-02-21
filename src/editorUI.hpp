@@ -40,44 +40,44 @@ class $modify(ITCEditorUI, EditorUI) {
 	}
 
 
-	UndoObject* createTransfromNoScaleUndoObject(bool addToUndoList = true) {
+	// UndoObject* createUndoSpreadObject(bool addToUndoList = true) {
 		
-		auto objects = getSelectedObjects();
-		auto objectCopies = CCArray::create();
-		for (int i = 0; i < objects->count(); i++) {
-			auto obj = static_cast<GameObject*>(objects->objectAtIndex(i));
-			auto objCopy = GameObjectCopy::create(obj);
-			objectCopies->addObject(objCopy);
-		}
+	// 	auto objects = getSelectedObjects();
+	// 	auto objectCopies = CCArray::create();
+	// 	for (int i = 0; i < objects->count(); i++) {
+	// 		auto obj = static_cast<GameObject*>(objects->objectAtIndex(i));
+	// 		auto objCopy = GameObjectCopy::create(obj);
+	// 		objectCopies->addObject(objCopy);
+	// 	}
 
-		UndoObject* undo = new UndoObject();
-		undo->autorelease();
+	// 	UndoObject* undo = new UndoObject();
+	// 	undo->autorelease();
+		
+	// 	undo->m_redo = false;
+	// 	undo->m_objects = nullptr;
+	// 	undo->m_objectCopy = nullptr;
+	// 	undo->m_undoTransform = false;
+	// 	undo->m_command = UndoCommand::Transform;
 
-		undo->m_redo = false;
-		undo->m_objects = nullptr;
-		undo->m_objectCopy = nullptr;
-		undo->m_undoTransform = false;
-		undo->m_command = UndoCommand::Transform;
+	// 	if (objectCopies->count() == 1) {
+	// 		undo->m_objectCopy = static_cast<GameObjectCopy*>(objectCopies->firstObject());
+	// 		undo->m_objectCopy->retain();
+	// 	} else {
+	// 		undo->m_objects = objectCopies;
+	// 		undo->m_objects->retain();
+	// 	}
 
-		if (objectCopies->count() == 1) {
-			undo->m_objectCopy = static_cast<GameObjectCopy*>(objectCopies->firstObject());
-			undo->m_objectCopy->retain();
-		} else {
-			undo->m_objects = objectCopies;
-			undo->m_objects->retain();
-		}
+	// 	if (addToUndoList) {
+	// 		m_editorLayer->m_redoObjects->removeAllObjects();
+	// 		int maxUndo = m_editorLayer->m_increaseMaxUndoRedo ? 1000 : 200;
+	// 		if (m_editorLayer->m_undoObjects->count() >= maxUndo) {
+	// 			m_editorLayer->m_undoObjects->removeObjectAtIndex(0);
+	// 		}
+	// 		m_editorLayer->m_undoObjects->addObject(undo);
+	// 	}
 
-		if (addToUndoList) {
-			m_editorLayer->m_redoObjects->removeAllObjects();
-			int maxUndo = m_editorLayer->m_increaseMaxUndoRedo ? 1000 : 200;
-			if (m_editorLayer->m_undoObjects->count() >= maxUndo) {
-				m_editorLayer->m_undoObjects->removeObjectAtIndex(0);
-			}
-			m_editorLayer->m_undoObjects->addObject(undo);
-		}
-
-		return undo;
-	}
+	// 	return undo;
+	// }
 
 	// $override
 	// void moveObject(GameObject* p0, CCPoint p1) {
@@ -135,13 +135,14 @@ class $modify(ITCEditorUI, EditorUI) {
 			transformSkewXChanged(-44.9f);
 			transformSkewYChanged(-44.9f);
 		}
+		// log::info("{} -- {} {} -- {} {} -- {} {}", anchor, scaleX, scaleY, rotX, rotY, warpX, warpY);
 		EditorUI::transformObjects(objs, anchor, scaleX, scaleY, rotX, rotY, warpX, warpY);
 		return;
 	}
 
 
 	void activateTransformControlWithAngle(float angle) {
-		log::debug("activate w angle {}", angle);
+		// log::debug("activate w angle {}", angle);
 		m_fields->m_initialAngle = angle;
 		m_fields->m_useAngle = true;
 		EditorUI::deactivateRotationControl();
@@ -208,7 +209,7 @@ class $modify(ITCEditorUI, EditorUI) {
 		UndoObject* ret = EditorUI::createUndoObject(p0, p1);
 		if (ret && ret->m_command == UndoCommand::Transform && ret->m_undoTransform) {
 			addAngleToUndoObject(ret, m_transformControl->m_mainNode->getRotation());
-			log::info("angle added");
+			// log::info("angle added");
 		}
 		return ret;
 	}
@@ -264,7 +265,7 @@ class $modify(ITCEditorUI, EditorUI) {
 				auto newLastRedo = static_cast<UndoObject*>(to->lastObject());
 
 				if (newLastRedo && newLastRedo != oldLastRedo) {
-					// RobTop's bug thai it sometimes is not set
+					// RobTop's bug that it sometimes is not set
 					newLastRedo->m_undoTransform = true;
 					newLastRedo->m_command = UndoCommand::Transform;
 
@@ -289,7 +290,6 @@ class $modify(ITCEditorUI, EditorUI) {
 			EditorUI::undoLastAction(p0);
 		});
 		// log::info("undo {} {}", m_editorLayer->m_undoObjects, m_editorLayer->m_redoObjects);
-			
 	}
 
 
@@ -299,7 +299,6 @@ class $modify(ITCEditorUI, EditorUI) {
 			EditorUI::redoLastAction(p0);
 		});
 		// log::info("redo {} {}", m_editorLayer->m_undoObjects, m_editorLayer->m_redoObjects);
-
 	}
 
 
