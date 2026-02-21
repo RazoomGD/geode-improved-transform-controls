@@ -305,15 +305,15 @@ class $modify(ITCEditorUI, EditorUI) {
 	#ifdef GEODE_IS_MACOS
 
 	$override
-	void keyDown(enumKeyCodes p0) {
+	void keyDown(enumKeyCodes p0, double timestamp) {
 		auto dispatcher = CCKeyboardDispatcher::get();
 		if (m_editorLayer->m_playbackMode == PlaybackMode::Playing || p0 != KEY_Z || dispatcher->getControlKeyPressed()) {
-			return EditorUI::keyDown(p0);
+			return EditorUI::keyDown(p0, timestamp);
 		}
 
 		bool isUndo = !dispatcher->getShiftKeyPressed();
 		universalUndoRedoHook(isUndo, [this, p0] {
-			EditorUI::keyDown(p0);
+			EditorUI::keyDown(p0, timestamp);
 		});
 	}
 

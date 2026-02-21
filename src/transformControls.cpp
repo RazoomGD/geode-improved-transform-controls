@@ -159,6 +159,13 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		}
 	}
 
+	// todo: IOS not picking the inline definitions in geode 5-beta
+	#ifdef GEODE_IS_IOS
+	CCSprite* spriteByTag(int tag) {
+		return static_cast<CCSprite*>(m_warpSprites->objectAtIndex(tag - 1));
+	}
+	#endif
+
 
 	$override 
 	bool init() {
