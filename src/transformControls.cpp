@@ -418,7 +418,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 	// try to snap touch to the grid
 	bool snapTouchToGrid(CCTouch* touch) {
-		if (fmod(m_mainNode->getRotation(), 90.f) != 0 && m_transformButtonType != 1) return false;
+		float nearest90 = roundf(m_mainNode->getRotation() / 90.f) * 90.f;
+		if (abs(m_mainNode->getRotation() - nearest90) > MAX_FP_ERROR && m_transformButtonType != 1) return false;
 		if (m_transformButtonType < 1 || m_transformButtonType > 9) return false;
 
 		auto baseNode = (m_transformButtonType == 1) ? this : m_mainNode;

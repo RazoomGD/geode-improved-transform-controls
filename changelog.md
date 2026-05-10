@@ -1,3 +1,6 @@
+# 1.2.1
+- Allow snapping to grid with tiny rotations
+
 # 1.2.0
 - Port to GD 2.2081
 - Additions:
