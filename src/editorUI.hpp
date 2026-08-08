@@ -1,3 +1,34 @@
+struct EditorScale {
+	float commonScale; float tabScale;
+};
+
+// stolen from Object Groups
+EditorScale getEditorScale() {
+    EditorScale ret {1.f, 1.f};
+    if (auto betterEdit = Loader::get()->getInstalledMod("hjfod.betteredit")) {
+        if (betterEdit->isLoaded() && betterEdit->hasSetting("scale-factor")) {
+			double scale = betterEdit->getSettingValue<double>("scale-factor");
+			if (scale > 0.1 && scale < 1.0) {
+                ret.commonScale = ret.tabScale = scale;
+                return ret;
+            }
+		}
+    }
+    if (auto tinker = Loader::get()->getInstalledMod("alphalaneous.tinker")) {
+        if (tinker->isLoaded() && tinker->hasSetting("UIScaling-enabled") && tinker->getSettingValue<bool>("UIScaling-enabled")) {
+            if (tinker->hasSetting("UIScaling-scale")) {
+                double scale = tinker->getSettingValue<double>("UIScaling-scale");
+                if (scale > 0.1 && scale < 1.0) {
+                    ret.commonScale = ret.tabScale = scale;
+                }
+            }
+            if (tinker->hasSetting("UIScaling-scale-toolbar") && tinker->getSettingValue<bool>("UIScaling-scale-toolbar")) {
+                ret.tabScale = ret.commonScale;
+            }
+        }
+    }
+    return ret;
+}
 
 
 class $modify(ITCEditorUI, EditorUI) {
@@ -5,7 +36,42 @@ class $modify(ITCEditorUI, EditorUI) {
 		float m_initialAngle = 0;
 		bool m_useAngle = false;
 		std::unordered_map<UndoObject*, float> m_anglesForUndoObjects;
+		Ref<CCMenu> m_modButtonsMenu;
+		int m_menuMode = 1;
 	};
+
+	bool init(LevelEditorLayer* editorLayer) {
+		if (!EditorUI::init(editorLayer)) return false;
+		auto menu = CCMenu::create();
+		menu->setVisible(false);
+		// 1: default, 2: top, "3: bottom, "4: left, "5: right
+		int mode = std::clamp(atoi(Mod::get()->getSettingValue<std::string>("buttons-location").data()), 1, 5);
+		bool labelsVisible = Mod::get()->getSettingValue<bool>("show-labels");
+		auto layout = AxisLayout::create()->setAutoGrowAxis(true)->setGap(2);
+		switch (mode) {
+			case 2: menu->setAnchorPoint(ccp(.5f, 1)); break;
+			case 3: menu->setAnchorPoint(ccp(.5f, 0)); break;
+			case 4: menu->setAnchorPoint(ccp(0, .5f)); break;
+			case 5: menu->setAnchorPoint(ccp(1, .5f)); break;
+			default: break;
+		}
+		if (mode == 4 || mode == 5) {
+			layout->setAxis(Axis::Column)->setAxisReverse(true);
+			if (labelsVisible) layout->setGap(4);
+		}
+		m_fields->m_modButtonsMenu = menu;
+		m_fields->m_menuMode = mode;
+		addChild(menu, 2);
+		menu->setID("editor-menu"_spr);
+		menu->setLayout(layout);
+		return true;
+	}
+
+	void addModControlButton(CCNode* button) {
+		m_fields->m_modButtonsMenu->addChild(button);
+		m_fields->m_modButtonsMenu->updateLayout();
+	}
+
 
 	void addAngleToUndoObject(UndoObject* undo, float angle) {
 		m_fields->m_anglesForUndoObjects[undo] = angle;
@@ -141,6 +207,9 @@ class $modify(ITCEditorUI, EditorUI) {
 	}
 
 
+	void moveTransformAnchorToPos(CCPoint positionInLevelCoords);
+
+
 	void activateTransformControlWithAngle(float angle) {
 		// log::debug("activate w angle {}", angle);
 		m_fields->m_initialAngle = angle;
@@ -161,8 +230,46 @@ class $modify(ITCEditorUI, EditorUI) {
 			deactivateRotationControl();
 		}
 		EditorUI::activateTransformControl(p0);
+		// 1: default, 2: top, "3: bottom, "4: left, "5: right
+		int mode = m_fields->m_menuMode;
+		if (mode != 1) {
+			if (auto menu = m_fields->m_modButtonsMenu) {
+				int cols = m_editGroupBtn ? ceil(m_editGroupBtn->getParent()->getChildrenCount() / 4.f) : 3;
+				auto editorScale = getEditorScale();
+				menu->setVisible(m_transformControl->isVisible());
+				float menuScale = Mod::get()->getSettingValue<double>("button-scale");
+				menu->setScale(editorScale.commonScale * menuScale);
+				auto blPoint = ccp(75 * editorScale.commonScale, 120 * editorScale.tabScale);
+				auto trPoint = ccp((mode == 5 ? 39 * cols : 75) * editorScale.commonScale, 35 * editorScale.commonScale);
+				CCRect rect {blPoint, (CCDirector::get()->getWinSize() - trPoint) - blPoint};
+				// 1: default, 2: top, "3: bottom, "4: left, "5: right
+				switch (mode) {
+					case 2: menu->setPosition(rect.getMidX(), rect.getMaxY()); break;
+					case 3: menu->setPosition(rect.getMidX(), rect.getMinY()); break;
+					case 4: menu->setPosition(rect.getMinX(), rect.getMidY()); break;
+					case 5: menu->setPosition(rect.getMaxX(), rect.getMidY()); break;
+					default: break;
+				}
+			}
+		}
 	}
 
+	$override
+	void deactivateTransformControl() {
+		EditorUI::deactivateTransformControl();
+		if (auto menu = m_fields->m_modButtonsMenu) {
+			menu->setVisible(false);
+		}
+	}
+
+	void showUI(bool show) {
+		EditorUI::showUI(show);
+		if (m_fields->m_menuMode != 1 && m_transformControl) {
+			if (auto menu = m_fields->m_modButtonsMenu) {
+				menu->setVisible(show && m_transformControl->isVisible());
+			}
+		}
+	}
 
 	$override
 	void updateTransformControl() {
@@ -245,10 +352,16 @@ class $modify(ITCEditorUI, EditorUI) {
 					float targetRot = *maybeRot;
 
 					if (m_transformControl->isVisible() && currentRot != targetRot) {
+						auto oldAnchorPos = m_transformControl->getPosition();
+
 						deactivateTransformControl();
 						original();
 						originalWasCalled = true;
 						activateTransformControlWithAngle(*maybeRot);
+
+						// anchor pos resets after re-activating controls, restore it
+						auto newAnchorPos = m_transformControl->getPosition();
+						if (oldAnchorPos != newAnchorPos) moveTransformAnchorToPos(oldAnchorPos);
 
 						// undo obj had the angle, so the next redo obj also must have it
 						setFreeRotValue = currentRot;

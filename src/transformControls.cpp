@@ -41,6 +41,7 @@ struct {
 	bool m_snapAnchorToCenter;
 	float m_buttonScale;
 	bool m_defaultGridSnap;
+	bool m_showLabels;
 	void update() {
 		m_interfaceCol = Mod::get()->getSettingValue<cocos2d::ccColor4B>("interface-color");
 		m_interfaceColExtra = Mod::get()->getSettingValue<cocos2d::ccColor4B>("interface-color-extra");
@@ -49,6 +50,7 @@ struct {
 		m_defaultGridSnap = Mod::get()->getSettingValue<bool>("default-grid-snap");
 		m_extraInterfaceElements = Mod::get()->getSettingValue<bool>("show-extra-ui-elements");
 		m_snapAnchorToCenter = Mod::get()->getSettingValue<bool>("anchor-snap-center");
+		m_showLabels = Mod::get()->getSettingValue<bool>("show-labels");
 	}
 } SETTINGS;
 
@@ -121,6 +123,14 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		
 		GJTransformControlInterface* m_interface;
 
+		struct {
+			CCMenuItemToggler* m_lockButton;
+			CCMenuItemToggler* m_anchorBtn;
+			CCMenuItemToggler* m_snapBtn;
+			CCMenuItemToggler* m_gridSnapBtn;
+			CCMenuItemToggler* m_freeRotBtn;
+		} m_editorButtons;
+
 		~Fields() {STATE.save();}
 	};
 
@@ -132,6 +142,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		label->setScale(.2f);
 		label->setTag(BUTTON_LABEL_TAG);
 		updateLabelOpacity(button, false);
+		if (!SETTINGS.m_showLabels) label->setVisible(false);
 	}
 
 
@@ -208,6 +219,10 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 		arrangeMenuButtons();
 
+		// 1: default, 2: top, "3: bottom, "4: left, "5: right
+		int mode = std::clamp(atoi(Mod::get()->getSettingValue<std::string>("buttons-location").data()), 1, 5);
+		if (mode != 1) f->m_menu->setVisible(false);
+
 		// add interface node
 		f->m_interface = GJTransformControlInterface::create(this, SETTINGS.m_interfaceCol, SETTINGS.m_interfaceColExtra);
 		m_mainNode->addChild(f->m_interface);
@@ -216,7 +231,37 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		// anchor
 		spriteByTag(1)->setVisible(STATE.m_enableAnchor);
 
-		queueInMainThread([this](){loadState();}); // when editorUI is loaded
+		// when editorUI is loaded
+		queueInMainThread([this]{
+			auto editor = reinterpret_cast<ITCEditorUI*>(EditorUI::get());
+			const auto createBtn = [this, editor](const char* sprOn, const char* sprOff, SEL_MenuHandler handler, const char* label, bool hide=false) {
+				auto btn = CCMenuItemToggler::create(
+					CCSprite::createWithSpriteFrameName(sprOff), 
+					CCSprite::createWithSpriteFrameName(sprOn), 
+					this, handler
+				);
+				addLabel(btn->m_onButton, label);
+				addLabel(btn->m_offButton, label);
+				updateLabelOpacity(btn->m_onButton, true);
+				updateLabelOpacity(btn->m_offButton, false);
+				btn->setVisible(!hide);
+				editor->addModControlButton(btn);
+				return btn;
+			};
+			m_fields->m_editorButtons.m_lockButton = createBtn("warpLockOnBtn_001.png", "warpLockOffBtn_001.png", 
+				menu_selector(MyGJTransformControl::onToggleLockScale), "ScaleXY");
+			m_fields->m_editorButtons.m_anchorBtn = createBtn(ANCHOR_ON_SPR, ANCHOR_OFF_SPR,
+				menu_selector(MyGJTransformControl::onToggleAnchorBtn), "Anchor");
+			m_fields->m_editorButtons.m_snapBtn = createBtn(SNAP_ON_SPR, SNAP_OFF_SPR,
+				menu_selector(MyGJTransformControl::onSnapBtn), "Snap");
+			m_fields->m_editorButtons.m_gridSnapBtn = createBtn(GRID_SNAP_ON_SPR, GRID_SNAP_OFF_SPR,
+				menu_selector(MyGJTransformControl::onSnapGridBtn), "GridSnap", SETTINGS.m_defaultGridSnap);
+			m_fields->m_editorButtons.m_freeRotBtn = createBtn(FREEROT_ON_SPR, FREEROT_OFF_SPR,
+				menu_selector(MyGJTransformControl::onFreeRotBtn), "FreeRot");
+			
+			loadState();
+			updateModButtonsInEditor();
+		});
 
 		return true;
 	}
@@ -662,7 +707,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		// fix bug when scaled sprite doesn't match button touch box (scale not btn but menu)
 		if (!m_fields->m_menu) return;
 		m_fields->m_menu->setScale(scale * SETTINGS.m_buttonScale);
-		m_warpLockButton->getChildByTag(1)->setScale(1.f);		
+		m_warpLockButton->getChildByTag(1)->setScale(1.f);	
 	}
 
 
@@ -699,10 +744,19 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 		}
 	}
 
+	void updateModButtonsInEditor() {
+		const auto &f = m_fields->m_editorButtons;
+		if (f.m_lockButton) f.m_lockButton->toggle(STATE.m_lockXY);
+		if (f.m_anchorBtn) f.m_anchorBtn->toggle(STATE.m_enableAnchor);
+		if (f.m_snapBtn) f.m_snapBtn->toggle(STATE.m_snap);
+		if (f.m_gridSnapBtn) f.m_gridSnapBtn->toggle(STATE.m_gridSnap);
+		if (f.m_freeRotBtn) f.m_freeRotBtn->toggle(STATE.m_freeRot);
+	}
 
 	$override
-	void onToggleLockScale(CCObject* sender) {
-		GJTransformControl::onToggleLockScale(sender);
+	void onToggleLockScale(CCObject*) {
+		updateModButtonsInEditor();
+		GJTransformControl::onToggleLockScale(m_warpLockButton);
 		STATE.m_lockXY = m_warpLocked;
 		updateLabelOpacity(m_warpLockButton, m_warpLocked);
 	}
@@ -711,6 +765,8 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 	void onToggleAnchorBtn(CCObject*) {
 		auto anchor = spriteByTag(1);
 		auto editor = EditorUI::get();
+
+		updateModButtonsInEditor();
 
 		STATE.m_enableAnchor = !STATE.m_enableAnchor;
 		if (STATE.m_enableAnchor) {
@@ -741,6 +797,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 
 	void onSnapBtn(CCObject*) {
+		updateModButtonsInEditor();
 		STATE.m_snap = !STATE.m_snap;
 		if (STATE.m_snap) {
 			m_fields->m_snapBtn->setSprite(CCSprite::createWithSpriteFrameName(SNAP_ON_SPR));
@@ -752,6 +809,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 
 	void onSnapGridBtn(CCObject*) {
+		updateModButtonsInEditor();
 		STATE.m_gridSnap = !STATE.m_gridSnap;
 		if (STATE.m_gridSnap) {
 			m_fields->m_gridSnapBtn->setSprite(CCSprite::createWithSpriteFrameName(GRID_SNAP_ON_SPR));
@@ -763,6 +821,7 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 
 	void onFreeRotBtn(CCObject*) {
+		updateModButtonsInEditor();
 		STATE.m_freeRot = !STATE.m_freeRot;
 		if (STATE.m_freeRot) {
 			m_fields->m_freeRotBtn->setSprite(CCSprite::createWithSpriteFrameName(FREEROT_ON_SPR));
@@ -774,3 +833,9 @@ class $modify(MyGJTransformControl, GJTransformControl) {
 
 };
 
+
+// EditorUI functions
+
+void ITCEditorUI::moveTransformAnchorToPos(CCPoint positionInLevelCoords) {
+	reinterpret_cast<MyGJTransformControl*>(m_transformControl)->moveAnchorToPos(positionInLevelCoords);
+}

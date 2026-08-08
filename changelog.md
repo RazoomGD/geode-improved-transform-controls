@@ -1,3 +1,8 @@
+# 1.2.2
+- Add option to lock menu with buttons in the editor
+- Add option to hide the labels
+- Fix bug where undoing/redoing rotation transform reset the anchor position
+
 # 1.2.1
 - Allow snapping to grid with tiny rotations
 
